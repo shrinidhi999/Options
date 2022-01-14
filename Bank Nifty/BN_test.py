@@ -12,6 +12,7 @@ import pandas as pd
 import requests
 import yfinance as yf
 from plyer import notification
+from pytz import timezone
 
 warnings.filterwarnings("ignore")
 
@@ -19,8 +20,8 @@ warnings.filterwarnings("ignore")
 interval = 15
 symbol = "^NSEBANK"
 
-prev_day = dt.today() - timedelta(days=1)
-input = (prev_day - timedelta(days=58)).strftime("%Y-%m-%d")
+input = (dt.now(timezone("Asia/Kolkata")).today() -
+         timedelta(days=59)).strftime("%Y-%m-%d")
 # input = "2022-01-14"
 
 call_signal = False
@@ -38,7 +39,7 @@ signal_result_price = []
 
 rsi_upper_limit = 95
 rsi_lower_limit = 0.5
-margin = 20
+margin = 50
 
 
 def tr(data):

@@ -14,6 +14,7 @@ import pandas as pd
 import requests
 import yfinance as yf
 from plyer import notification
+from pytz import timezone
 
 warnings.filterwarnings("ignore")
 
@@ -21,7 +22,8 @@ warnings.filterwarnings("ignore")
 interval = 5
 symbol = "^NSEBANK"
 
-input = (dt.today() - timedelta(days=1)).strftime("%Y-%m-%d")
+present_today = (dt.now(timezone("Asia/Kolkata")).today() -
+                 timedelta(days=1)).strftime("%Y-%m-%d")
 # input = "2022-01-14"
 
 call_signal = False
@@ -123,10 +125,9 @@ def send_mobile_notification(msg):
     result = requests.get(url + "/sendMessage", params=params, verify=False)
 
 
-def is_trading_time():
+def is_trading_time(timing):
     global call_signal, put_signal
 
-    timing = dt.now()
     is_closing_time = dtm(timing.hour, timing.minute) >= dtm(14, 30)
 
     if timing.hour < 10 or is_closing_time:
@@ -143,8 +144,7 @@ def is_trading_time():
         else:
             print("Out of trade timings")
         return False
-    else:
-        return True
+    return True
 
 
 def alert(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val):
@@ -207,21 +207,22 @@ def alert(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi
         print(msg)
 
 
-def download_data():
-    end_time = dt.now() + timedelta(minutes=1)
-    return yf.download(symbol, start=input, end=end_time, period="1d", interval=str(interval) + "m")
+def download_data(timing):
+    end_time = timing + timedelta(minutes=1)
+    return yf.download(symbol, start=present_today, end=end_time, period="1d", interval=str(interval) + "m")
 
 
 def run_code():
 
     while True:
+        timing = dt.now(timezone("Asia/Kolkata"))
         print("-----------------------------------------")
-        print(f'Time: {time.strftime("%d-%m-%Y %H:%M")}')
-        start_time = dt.now().minute
-        res = start_time % interval
+        print(f'Time: {timing.strftime("%d-%m-%Y %H:%M")}')
 
-        if res == 0 and is_trading_time():
-            df = download_data()
+        res = timing.minute % interval
+
+        if res == 0 and is_trading_time(timing):
+            df = download_data(timing)
             df["ST_7"] = supertrend(df, 7, 1)["in_uptrend"]
             df["ST_8"] = supertrend(df, 8, 2)["in_uptrend"]
             df["ST_9"] = supertrend(df, 9, 3)["in_uptrend"]
