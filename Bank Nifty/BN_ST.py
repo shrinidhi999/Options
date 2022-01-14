@@ -152,6 +152,7 @@ def alert(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi
 
     print(f"Time: {timing}")
     timing = timing.strftime("%d-%m-%Y %H:%M")
+    msg = None
 
     # print(f"super_trend_arr: {super_trend_arr}")
     # print(f"super_trend_arr_old: {super_trend_arr_old}")
@@ -164,12 +165,15 @@ def alert(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi
         and call_signal == False
         and close_val > open_val
         and rsi_val < rsi_upper_limit
-        # and not super_trend_arr_old.all()  # todo - check
     ):
         call_signal = True
         price = int(math.ceil(close_val / 100.0)) * 100
         price += 200
-        msg = f"CALL SIGNAL !!! {timing},  \nCALL Strike Price: {price} CE"
+
+        if super_trend_arr_old.all():
+            msg = f"On going CALL SIGNAL !!! {timing},  \nCALL Strike Price: {price} CE"
+        else:
+            msg = f"CALL SIGNAL !!! {timing},  \nCALL Strike Price: {price} CE"
         set_notification(msg)
         print(msg)
 
@@ -178,41 +182,34 @@ def alert(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi
         and put_signal == False
         and close_val < open_val
         and rsi_val > rsi_lower_limit
-        # and any(super_trend_arr_old)  # todo - check
     ):
         put_signal = True
         price = int(math.floor(close_val / 100.0)) * 100
         price -= 200
-        msg = f"PUT SIGNAL !!! {timing}, \nPUT Strike Price: {price} PE"
+
+        if not any(super_trend_arr_old):
+            msg = f"On going PUT SIGNAL !!! {timing}, \nPUT Strike Price: {price} PE"
+        else:
+            msg = f"PUT SIGNAL !!! {timing}, \nPUT Strike Price: {price} PE"
         set_notification(msg)
         print(msg)
 
     if call_signal and not super_trend_arr.all():
         call_signal = False
-        set_notification(f"CALL EXIT !!! {timing}")
-        print(f"CALL Exit: {timing}")
+        msg = f"CALL EXIT !!! {timing}"
+        set_notification(msg)
+        print(msg)
 
     if put_signal and super_trend_arr.any():
         put_signal = False
-        set_notification(f"PUT EXIT !!! {timing}")
-        print(f"PUT Exit: {timing}")
+        msg = f"PUT EXIT !!! {timing}"
+        set_notification(msg)
+        print(msg)
 
 
 def download_data():
-    return yf.download(symbol, start=input, period="1d", interval=str(interval) + "m")
-
-
-def test_code():
-    # todo remove
-    df = download_data()
-    df["ST_7"] = supertrend(df, 7, 1)["in_uptrend"]
-    df["ST_8"] = supertrend(df, 8, 2)["in_uptrend"]
-    df["ST_9"] = supertrend(df, 9, 3)["in_uptrend"]
-    df["RSI"] = rsi(df)
-
-    for i in range(len(df)):
-        arr = df.iloc[i][["ST_7", "ST_8", "ST_9"]].values
-        alert(arr, df.index[i], df["Close"][i], df["Open"][i], df["RSI"][i])
+    end_time = dt.now() + timedelta(minutes=1)
+    return yf.download(symbol, start=input, end=end_time, period="1d", interval=str(interval) + "m")
 
 
 def run_code():

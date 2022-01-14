@@ -16,7 +16,7 @@ from plyer import notification
 warnings.filterwarnings("ignore")
 
 
-interval = 5
+interval = 15
 symbol = "^NSEBANK"
 
 prev_day = dt.today() - timedelta(days=1)
@@ -38,7 +38,7 @@ signal_result_price = []
 
 rsi_upper_limit = 95
 rsi_lower_limit = 0.5
-margin = 25
+margin = 20
 
 
 def tr(data):
