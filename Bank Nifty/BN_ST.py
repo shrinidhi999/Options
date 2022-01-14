@@ -10,7 +10,6 @@ from datetime import datetime as dt
 from datetime import time as dtm
 from datetime import timedelta
 
-import numpy as np
 import pandas as pd
 import requests
 import yfinance as yf
