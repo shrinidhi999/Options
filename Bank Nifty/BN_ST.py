@@ -23,7 +23,7 @@ interval = 5
 symbol = "^NSEBANK"
 
 input = (dt.today() - timedelta(days=1)).strftime("%Y-%m-%d")
-# input = "2022-01-13"
+# input = "2022-01-14"
 
 call_signal = False
 put_signal = False
