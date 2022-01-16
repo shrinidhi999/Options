@@ -1,20 +1,20 @@
 # pip install yfinance
 # pip install plyer
 
-import os
 import logging
 import math
+import os
 import time
 import warnings
 from datetime import datetime as dt
 from datetime import time as dtm
 from datetime import timedelta
 
-import pandas as pd
 import requests
 import yfinance as yf
 from plyer import notification
 from pytz import timezone
+
 warnings.filterwarnings("ignore")
 
 time_zone = "Asia/Kolkata"
@@ -121,7 +121,7 @@ def rsi(df, periods=2, ema=True):
     up = close_delta.clip(lower=0)
     down = -1 * close_delta.clip(upper=0)
 
-    if ema == True:
+    if ema is True:
         # Use exponential moving average
         ma_up = up.ewm(com=periods - 1, adjust=True,
                        min_periods=periods).mean()
@@ -146,7 +146,7 @@ def set_notification(msg):
 
 def send_mobile_notification(msg):
     params = {"chat_id": "957717113", "text": msg}
-    result = requests.get(url + "/sendMessage", params=params, verify=False)
+    requests.get(url + "/sendMessage", params=params, verify=False)
 
 
 def is_trading_time(timing):
@@ -206,7 +206,7 @@ def signal_alert(super_trend_arr, super_trend_arr_old, timing, close_val, open_v
 
     if (
         super_trend_arr.all()
-        and call_signal == False
+        and call_signal is False
         and close_val > open_val
         and rsi_val < rsi_upper_limit
     ):
@@ -215,7 +215,7 @@ def signal_alert(super_trend_arr, super_trend_arr_old, timing, close_val, open_v
 
     if (
         not any(super_trend_arr)
-        and put_signal == False
+        and put_signal is False
         and close_val < open_val
         and rsi_val > rsi_lower_limit
     ):
