@@ -17,7 +17,7 @@ from pytz import timezone
 warnings.filterwarnings("ignore")
 
 
-interval = 15
+interval = 5
 symbol = "^NSEBANK"
 
 input = (dt.now(timezone("Asia/Kolkata")).today() -
@@ -39,7 +39,7 @@ signal_result_price = []
 
 rsi_upper_limit = 95
 rsi_lower_limit = 0.5
-margin = 50
+margin = 20
 
 
 def tr(data):
@@ -222,11 +222,12 @@ def get_results():
     )
 
     print(
-        f"Margin Points: {margin} \nAccuracy: {round((sum(signal_is_correct) / len(signal_is_correct) * 100), 2)}%"
+        f"Interval: {interval} min \nMargin Points: {margin} \nAccuracy: {round((sum(signal_is_correct) / len(signal_is_correct) * 100), 2)}%"
     )
 
     print("Sample Result:")
-    print(df_test_result.tail(10))
+    results = df_test_result[df_test_result['Is Signal Correct'] == False]
+    print(df_test_result.tail(30))
 
 
 def test_code():
@@ -244,11 +245,11 @@ def test_code():
         alert(
             arr,
             df.index[i],
-            df["Close"][i - 1],
-            df["Open"][i - 1],
-            df["High"][i - 1],
-            df["Low"][i - 1],
-            df["RSI"][i - 1],
+            df["Close"][i],
+            df["Open"][i],
+            df["High"][i],
+            df["Low"][i],
+            df["RSI"][i],
         )
     get_results()
 

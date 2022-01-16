@@ -1,8 +1,8 @@
 # pip install yfinance
-
 # pip install plyer
 
-
+import os
+import logging
 import math
 import time
 import warnings
@@ -15,14 +15,15 @@ import requests
 import yfinance as yf
 from plyer import notification
 from pytz import timezone
-
 warnings.filterwarnings("ignore")
 
-
+time_zone = "Asia/Kolkata"
+time_format = "%d-%m-%Y %H:%M"
 interval = 5
 symbol = "^NSEBANK"
+# symbol = "^DJUSBK"
 
-present_today = (dt.now(timezone("Asia/Kolkata")).today() -
+present_today = (dt.now(timezone(time_zone)).today() -
                  timedelta(days=1)).strftime("%Y-%m-%d")
 # input = "2022-01-14"
 
@@ -36,6 +37,29 @@ url = f"https://api.telegram.org/bot{token}"
 
 rsi_upper_limit = 95
 rsi_lower_limit = 0.5
+margin_strike_price_units = 300
+rsi_st_index = -1
+val_index = -1
+
+st1_length = 7
+st1_factor = 1
+st2_length = 8
+st2_factor = 2
+st3_length = 9
+st3_factor = 3
+
+
+logger = None
+
+
+def get_logger():
+    logging.basicConfig(filename=os.getcwd() + "\\BN_Logs.log",
+                        format='%(message)s',
+                        filemode='w')
+
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+    return logger
 
 
 def tr(data):
@@ -134,12 +158,12 @@ def is_trading_time(timing):
         if call_signal:
             call_signal = False
             print(
-                f"Warning: Time Out \nCALL Exit: {timing.strftime('%d-%m-%Y %H:%M')}")
+                f"Warning: Time Out \nCALL Exit: {timing.strftime(time_format)}")
 
         elif put_signal:
             put_signal = False
             print(
-                f"Warning: Time Out \nPUT Exit: {timing.strftime('%d-%m-%Y %H:%M')}")
+                f"Warning: Time Out \nPUT Exit: {timing.strftime(time_format)}")
 
         else:
             print("Out of trade timings")
@@ -147,12 +171,32 @@ def is_trading_time(timing):
     return True
 
 
-def alert(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val):
+def log_signal_msg(super_trend_arr, super_trend_arr_old, close_val, open_val, rsi_val, msg):
+    msg = f"Interval : {interval} min \n" + msg
+    set_notification(msg)
+    print(msg)
+    logger.info(
+        f"Message : {msg}, Close: {close_val}, Open: {open_val}, RSI: {rsi_val}, super_trend_arr: {super_trend_arr}, super_trend_arr_old: {super_trend_arr_old}")
+    logger.info(
+        "---------------------------------------------------------------------------------------------")
+
+
+def download_data():
+    df = yf.download(symbol, start=present_today,
+                     period="1d", interval=str(interval) + "m")
+
+    # Suppose the API called at 10.11am. The API returns 5m data till 10.10am and 1m data related to 10.11am.
+    # since our logic is for 5min data, we need to drop the 1m data.
+    if df.index[-1].minute % interval != 0:
+        df.drop(df.tail(1).index, inplace=True)
+    return df
+
+
+def signal_alert(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val):
     global call_signal, put_signal
 
     print(f"Time: {timing}")
-    timing = timing.strftime("%d-%m-%Y %H:%M")
-    msg = None
+    timing = timing.strftime(time_format)
 
     # print(f"super_trend_arr: {super_trend_arr}")
     # print(f"super_trend_arr_old: {super_trend_arr_old}")
@@ -166,16 +210,8 @@ def alert(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi
         and close_val > open_val
         and rsi_val < rsi_upper_limit
     ):
-        call_signal = True
-        price = int(math.ceil(close_val / 100.0)) * 100
-        price += 200
-
-        if super_trend_arr_old.all():
-            msg = f"On going CALL SIGNAL !!! {timing},  \nCALL Strike Price: {price} CE"
-        else:
-            msg = f"CALL SIGNAL !!! {timing},  \nCALL Strike Price: {price} CE"
-        set_notification(msg)
-        print(msg)
+        set_call_signal(super_trend_arr, super_trend_arr_old,
+                        timing, close_val, open_val, rsi_val)
 
     if (
         not any(super_trend_arr)
@@ -183,61 +219,106 @@ def alert(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi
         and close_val < open_val
         and rsi_val > rsi_lower_limit
     ):
-        put_signal = True
-        price = int(math.floor(close_val / 100.0)) * 100
-        price -= 200
-
-        if not any(super_trend_arr_old):
-            msg = f"On going PUT SIGNAL !!! {timing}, \nPUT Strike Price: {price} PE"
-        else:
-            msg = f"PUT SIGNAL !!! {timing}, \nPUT Strike Price: {price} PE"
-        set_notification(msg)
-        print(msg)
+        set_put_signal(super_trend_arr, super_trend_arr_old,
+                       timing, close_val, open_val, rsi_val)
 
     if call_signal and not super_trend_arr.all():
-        call_signal = False
-        msg = f"CALL EXIT !!! {timing}"
-        set_notification(msg)
-        print(msg)
+        exit_call_signal(super_trend_arr, super_trend_arr_old,
+                         timing, close_val, open_val, rsi_val)
 
     if put_signal and super_trend_arr.any():
-        put_signal = False
-        msg = f"PUT EXIT !!! {timing}"
-        set_notification(msg)
-        print(msg)
+        exit_put_signal(super_trend_arr, super_trend_arr_old,
+                        timing, close_val, open_val, rsi_val)
 
 
-def download_data(timing):
-    end_time = timing + timedelta(minutes=1)
-    return yf.download(symbol, start=present_today, end=end_time, period="1d", interval=str(interval) + "m")
+def exit_put_signal(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val):
+    global put_signal
+
+    put_signal = False
+    msg = f"PUT EXIT !!! {timing}"
+
+    log_signal_msg(super_trend_arr, super_trend_arr_old,
+                   close_val, open_val, rsi_val, msg)
+
+
+def exit_call_signal(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val):
+    global call_signal
+
+    call_signal = False
+    msg = f"CALL EXIT !!! {timing}"
+
+    log_signal_msg(super_trend_arr, super_trend_arr_old,
+                   close_val, open_val, rsi_val, msg)
+
+
+def set_put_signal(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val):
+    global put_signal
+
+    put_signal = True
+    msg = None
+
+    price = int(math.floor(close_val / 100.0)) * 100
+    price -= margin_strike_price_units
+
+    if not any(super_trend_arr_old):
+        msg = f"On going PUT SIGNAL !!! {timing}, \nPUT Strike Price: {price} PE"
+    else:
+        msg = f"PUT SIGNAL !!! {timing}, \nPUT Strike Price: {price} PE"
+
+    log_signal_msg(super_trend_arr, super_trend_arr_old,
+                   close_val, open_val, rsi_val, msg)
+
+
+def set_call_signal(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val):
+    global call_signal
+
+    call_signal = True
+    msg = None
+
+    price = int(math.ceil(close_val / 100.0)) * 100
+    price += margin_strike_price_units
+
+    if super_trend_arr_old.all():
+        msg = f"On going CALL SIGNAL !!! {timing},  \nCALL Strike Price: {price} CE"
+    else:
+        msg = f"CALL SIGNAL !!! {timing},  \nCALL Strike Price: {price} CE"
+
+    log_signal_msg(super_trend_arr, super_trend_arr_old,
+                   close_val, open_val, rsi_val, msg)
 
 
 def run_code():
+    logger.info(
+        f"Bank Nifty Strategy Started : {dt.now(timezone(time_zone)).strftime(time_format)}")
+    logger.info(
+        "---------------------------------------------------------------------------------------------")
 
     while True:
-        timing = dt.now(timezone("Asia/Kolkata"))
+        timing = dt.now(timezone(time_zone))
         print("-----------------------------------------")
-        print(f'Time: {timing.strftime("%d-%m-%Y %H:%M")}')
+        print(f'Time: {timing.strftime(time_format)}')
 
         res = timing.minute % interval
 
         if res == 0 and is_trading_time(timing):
-            df = download_data(timing)
-            df["ST_7"] = supertrend(df, 7, 1)["in_uptrend"]
-            df["ST_8"] = supertrend(df, 8, 2)["in_uptrend"]
-            df["ST_9"] = supertrend(df, 9, 3)["in_uptrend"]
+            df = download_data()
+            df["ST_7"] = supertrend(df, st1_length, st1_factor)["in_uptrend"]
+            df["ST_8"] = supertrend(df, st2_length, st2_factor)["in_uptrend"]
+            df["ST_9"] = supertrend(df, st3_length, st3_factor)["in_uptrend"]
             df["RSI"] = rsi(df)
 
-            super_trend_arr = df.iloc[-1][["ST_7", "ST_8", "ST_9"]].values
-            super_trend_arr_old = df.iloc[-2][["ST_7", "ST_8", "ST_9"]].values
+            super_trend_arr = df.iloc[rsi_st_index][[
+                "ST_7", "ST_8", "ST_9"]].values
+            super_trend_arr_old = df.iloc[rsi_st_index -
+                                          1][["ST_7", "ST_8", "ST_9"]].values
 
-            alert(
+            signal_alert(
                 super_trend_arr,
                 super_trend_arr_old,
-                df.index[-1],
-                df["Close"][-2],
-                df["Open"][-2],
-                df["RSI"][-2],
+                df.index[val_index],
+                df["Close"][val_index],
+                df["Open"][val_index],
+                df["RSI"][rsi_st_index],
             )
             time.sleep(interval * 60)
         else:
@@ -246,4 +327,5 @@ def run_code():
             time.sleep(sleep_time * 60)
 
 
+logger = get_logger()
 run_code()
