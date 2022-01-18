@@ -1,4 +1,4 @@
-call conda activate cuda2
+call conda activate bot
 python BN_ST.py 
 
 pause

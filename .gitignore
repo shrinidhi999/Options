@@ -129,3 +129,4 @@ dmypy.json
 .pyre/
 Bank Nifty/test.py
 .vscode/settings.json
+Bank Nifty/BN_ST.bat

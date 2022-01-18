@@ -1,6 +1,10 @@
 # pip install yfinance
 # pip install plyer
 
+# todo getting dates correctly - mon to fri
+# todo sleep times need to calculate at sec level: add loggers
+# check super_trend_arr: super_trend_arr_old: super_trend_arr_old should be same as prev super_trend_arr
+
 import logging
 import math
 import os
@@ -25,7 +29,7 @@ symbol = "^NSEBANK"
 
 present_today = (dt.now(timezone(time_zone)).today() -
                  timedelta(days=1)).strftime("%Y-%m-%d")
-# input = "2022-01-14"
+present_today = "2022-01-17"
 
 call_signal = False
 put_signal = False
@@ -184,11 +188,14 @@ def log_signal_msg(super_trend_arr, super_trend_arr_old, close_val, open_val, rs
 def download_data():
     df = yf.download(symbol, start=present_today,
                      period="1d", interval=str(interval) + "m")
-
+    logger.info(
+        f"DF downloaded : {df.tail(3)}")
     # Suppose the API called at 10.11am. The API returns 5m data till 10.10am and 1m data related to 10.11am.
     # since our logic is for 5min data, we need to drop the 1m data.
     if df.index[-1].minute % interval != 0:
         df.drop(df.tail(1).index, inplace=True)
+    logger.info(
+        f"DF updated : {df.tail(3)}")
     return df
 
 
@@ -198,6 +205,8 @@ def signal_alert(super_trend_arr, super_trend_arr_old, timing, close_val, open_v
     print(f"Time: {timing}")
     timing = timing.strftime(time_format)
 
+    logger.info(
+        f"Message : 5min Logging, Close: {close_val}, Open: {open_val}, RSI: {rsi_val}, super_trend_arr: {super_trend_arr}, super_trend_arr_old: {super_trend_arr_old}")
     # print(f"super_trend_arr: {super_trend_arr}")
     # print(f"super_trend_arr_old: {super_trend_arr_old}")
     # print(f"rsi_val: {rsi_val}")
@@ -300,7 +309,7 @@ def run_code():
 
         res = timing.minute % interval
 
-        if res == 0 and is_trading_time(timing):
+        if res == 1 and is_trading_time(timing):
             df = download_data()
             df["ST_7"] = supertrend(df, st1_length, st1_factor)["in_uptrend"]
             df["ST_8"] = supertrend(df, st2_length, st2_factor)["in_uptrend"]
@@ -322,7 +331,8 @@ def run_code():
             )
             time.sleep(interval * 60)
         else:
-            sleep_time = interval - res
+            res = 5 if res == 0 else res
+            sleep_time = interval - res + 1
             print(f"Sleep Time: {sleep_time} min")
             time.sleep(sleep_time * 60)
 
