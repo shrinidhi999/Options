@@ -57,18 +57,7 @@ st2_factor = 2
 st3_length = 9
 st3_factor = 3
 
-
 logger = None
-
-
-def get_logger():
-    logging.basicConfig(filename=os.getcwd() + f"\\BN_Logs_{present_day.strftime('%d-%m-%Y')}.log",
-                        format='%(message)s',
-                        filemode='w')
-
-    logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
-    return logger
 
 
 def tr(data):
@@ -130,7 +119,7 @@ def rsi(df, periods=2, ema=True):
     up = close_delta.clip(lower=0)
     down = -1 * close_delta.clip(upper=0)
 
-    if ema is True:
+    if ema == True:
         # Use exponential moving average
         ma_up = up.ewm(com=periods - 1, adjust=True,
                        min_periods=periods).mean()
@@ -145,6 +134,20 @@ def rsi(df, periods=2, ema=True):
     rsi = ma_up / ma_down
     rsi = 100 - (100 / (1 + rsi))
     return rsi
+
+
+def get_logger():
+
+    if not os.path.exists('Logs'):
+        os.makedirs('Logs')
+
+    logging.basicConfig(filename=os.getcwd() + f"\\Logs\\BN_Logs_{present_day.strftime('%d-%m-%Y')}.log",
+                        format='%(message)s',
+                        filemode='w')
+
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+    return logger
 
 
 def set_notification(msg):
@@ -316,7 +319,7 @@ def run_code():
 
         res = timing.minute % interval
 
-        if res == 1 and is_trading_time(timing):
+        if is_trading_time(timing) and res == 1:
             df = download_data()
             df["ST_7"] = supertrend(df, st1_length, st1_factor)["in_uptrend"]
             df["ST_8"] = supertrend(df, st2_length, st2_factor)["in_uptrend"]

@@ -20,9 +20,9 @@ warnings.filterwarnings("ignore")
 interval = 5
 symbol = "^NSEBANK"
 
-# input = (dt.now(timezone("Asia/Kolkata")).today() -
-#          timedelta(days=59)).strftime("%Y-%m-%d")
-input = "2022-01-14"
+input = (dt.now(timezone("Asia/Kolkata")).today() -
+         timedelta(days=59)).strftime("%Y-%m-%d")
+# input = "2022-01-14"
 
 call_signal = False
 put_signal = False
