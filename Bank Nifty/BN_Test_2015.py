@@ -40,6 +40,14 @@ signal_result_price = []
 
 rsi_upper_limit = 95
 rsi_lower_limit = 0.5
+
+st1_length = 7
+st1_factor = 1
+st2_length = 8
+st2_factor = 2
+st3_length = 9
+st3_factor = 3
+
 margin = 20
 
 
@@ -240,9 +248,9 @@ def test_code():
     # todo remove
 
     df = download_data()
-    df["ST_7"] = supertrend(df, 7, 1)["in_uptrend"]
-    df["ST_8"] = supertrend(df, 8, 2)["in_uptrend"]
-    df["ST_9"] = supertrend(df, 9, 3)["in_uptrend"]
+    df["ST_7"] = supertrend(df, st1_length, st1_factor)["in_uptrend"]
+    df["ST_8"] = supertrend(df, st2_length, st2_factor)["in_uptrend"]
+    df["ST_9"] = supertrend(df, st3_length, st3_factor)["in_uptrend"]
     df["RSI"] = rsi(df)
 
     for i in tqdm(range(len(df))):
