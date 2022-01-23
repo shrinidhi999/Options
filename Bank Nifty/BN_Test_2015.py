@@ -210,7 +210,7 @@ def download_data():
     df = pd.read_csv(r'D:\Options\Bank Nifty\NIFTY BANK Data.csv')
     df = df.set_index('Datetime')
     df.index = pd.to_datetime(df.index)
-    df = df[df.index.year > 2018]
+    # df = df[df.index.year > 2018]
     return df
 
 

@@ -1,9 +1,9 @@
 # pip install yfinance
 # pip install plyer
 
-# todo getting dates correctly - mon to fri
-# todo sleep times need to calculate at sec level: add loggers
-# check super_trend_arr: super_trend_arr_old: super_trend_arr_old should be same as prev super_trend_arr
+
+# todo sleep times need to calculate at sec level:
+# todo - if yf call fails send notification
 
 import logging
 import math
@@ -21,20 +21,25 @@ from pytz import timezone
 
 warnings.filterwarnings("ignore")
 
+
 time_zone = "Asia/Kolkata"
 time_format = "%d-%m-%Y %H:%M"
 interval = 5
 symbol = "^NSEBANK"
 # symbol = "^DJUSBK"
 
-present_today = (dt.now(timezone(time_zone)).today() -
-                 timedelta(days=1)).strftime("%Y-%m-%d")
-present_today = "2022-01-17"
+present_day = (dt.now(timezone(time_zone)).today())
+
+shift = timedelta(max(1, (present_day.weekday() + 6) % 7 - 3))
+last_business_day = (present_day - shift).strftime("%Y-%m-%d")
+
+# last_business_day = "2022-01-20"
 
 call_signal = False
 put_signal = False
 
 title = "ALERT!"
+chat_id = "957717113"
 token = "5013995887:AAHUu6qsNzw1Bsbq46LThezZBxbGn-E12Tw"
 url = f"https://api.telegram.org/bot{token}"
 
@@ -57,7 +62,7 @@ logger = None
 
 
 def get_logger():
-    logging.basicConfig(filename=os.getcwd() + "\\BN_Logs.log",
+    logging.basicConfig(filename=os.getcwd() + f"\\BN_Logs_{present_day.strftime('%d-%m-%Y')}.log",
                         format='%(message)s',
                         filemode='w')
 
@@ -143,13 +148,12 @@ def rsi(df, periods=2, ema=True):
 
 
 def set_notification(msg):
-    # pass
     notification.notify(title=title, message=msg, timeout=25)
     send_mobile_notification(msg)
 
 
 def send_mobile_notification(msg):
-    params = {"chat_id": "957717113", "text": msg}
+    params = {"chat_id": chat_id, "text": msg}
     requests.get(url + "/sendMessage", params=params, verify=False)
 
 
@@ -186,8 +190,11 @@ def log_signal_msg(super_trend_arr, super_trend_arr_old, close_val, open_val, rs
 
 
 def download_data():
-    df = yf.download(symbol, start=present_today,
+    df = yf.download(symbol, start=last_business_day,
                      period="1d", interval=str(interval) + "m")
+
+    logger.info(
+        "---------------------------------------------------------------------------------------------")
     logger.info(
         f"DF downloaded : {df.tail(3)}")
     # Suppose the API called at 10.11am. The API returns 5m data till 10.10am and 1m data related to 10.11am.
@@ -270,7 +277,7 @@ def set_put_signal(super_trend_arr, super_trend_arr_old, timing, close_val, open
     price -= margin_strike_price_units
 
     if not any(super_trend_arr_old):
-        msg = f"On going PUT SIGNAL !!! {timing}, \nPUT Strike Price: {price} PE"
+        msg = f"On going PUT Super Trend !!! {timing}, \nPUT Strike Price: {price} PE"
     else:
         msg = f"PUT SIGNAL !!! {timing}, \nPUT Strike Price: {price} PE"
 
@@ -288,7 +295,7 @@ def set_call_signal(super_trend_arr, super_trend_arr_old, timing, close_val, ope
     price += margin_strike_price_units
 
     if super_trend_arr_old.all():
-        msg = f"On going CALL SIGNAL !!! {timing},  \nCALL Strike Price: {price} CE"
+        msg = f"On going Call Super Trend !!! {timing},  \nCALL Strike Price: {price} CE"
     else:
         msg = f"CALL SIGNAL !!! {timing},  \nCALL Strike Price: {price} CE"
 
