@@ -4,7 +4,7 @@ import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 option_url = "https://tradingtick.com/options/longshort.php"
-option_strike = "36000CE"
+option_strike = "36400PE"
 
 
 def get_option_price(url, option):
@@ -12,7 +12,7 @@ def get_option_price(url, option):
         option + '","type":"data"}'
 
     result = eval(requests.request("POST", url, data=payload,
-                                   verify=False).json()[0].replace("null", "0"))[0]
+                                   verify=False).json()[0].replace("null", "0"))[1]
 
     result = float(result['lp']) + float(result['lastprice']
                                          ) if float(result['lp']) < 0 else float(result['lastprice'])

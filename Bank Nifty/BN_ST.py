@@ -2,9 +2,6 @@
 # pip install plyer
 
 
-# todo sleep times need to calculate at sec level:
-# todo - if yf call fails send notification
-
 import logging
 import math
 import os
@@ -193,19 +190,27 @@ def log_signal_msg(super_trend_arr, super_trend_arr_old, close_val, open_val, rs
 
 
 def download_data():
-    df = yf.download(symbol, start=last_business_day,
-                     period="1d", interval=str(interval) + "m")
+    df = None
+    try:
+        df = yf.download(symbol, start=last_business_day,
+                         period="1d", interval=str(interval) + "m")
 
-    logger.info(
-        "---------------------------------------------------------------------------------------------")
-    logger.info(
-        f"DF downloaded : {df.tail(3)}")
-    # Suppose the API called at 10.11am. The API returns 5m data till 10.10am and 1m data related to 10.11am.
-    # since our logic is for 5min data, we need to drop the 1m data.
-    if df.index[-1].minute % interval != 0:
-        df.drop(df.tail(1).index, inplace=True)
-    logger.info(
-        f"DF updated : {df.tail(3)}")
+        logger.info(
+            "---------------------------------------------------------------------------------------------")
+        logger.info(
+            f"DF downloaded : {df.tail(3)}")
+        # Suppose the API called at 10.11am. The API returns 5m data till 10.10am and 1m data related to 10.11am.
+        # since our logic is for 5min data, we need to drop the 1m data.
+        if df.index[-1].minute % interval != 0:
+            df.drop(df.tail(1).index, inplace=True)
+        logger.info(
+            f"DF updated : {df.tail(3)}")
+
+    except Exception as e:
+        print(e.message)
+        set_notification(f"Error: {e.message}")
+        logger.error(f"Error: {e.message}")
+
     return df
 
 
@@ -319,7 +324,11 @@ def run_code():
 
         res = timing.minute % interval
 
-        if is_trading_time(timing) and res == 1:
+        if is_trading_time(timing) and res == 3:
+            sleep_time_in_secs = (60 - timing.second) + (interval - 1) * 60
+            print(
+                f"Sleep Time: {(interval - 1)} min {(60 - timing.second)} sec")
+
             df = download_data()
             df["ST_7"] = supertrend(df, st1_length, st1_factor)["in_uptrend"]
             df["ST_8"] = supertrend(df, st2_length, st2_factor)["in_uptrend"]
@@ -339,10 +348,10 @@ def run_code():
                 df["Open"][val_index],
                 df["RSI"][rsi_st_index],
             )
-            time.sleep(interval * 60)
+            time.sleep(sleep_time_in_secs)
         else:
-            res = 5 if res == 0 else res
-            sleep_time = interval - res + 1
+            diff = 3 - res
+            sleep_time = diff if diff >= 0 else res
             print(f"Sleep Time: {sleep_time} min")
             time.sleep(sleep_time * 60)
 

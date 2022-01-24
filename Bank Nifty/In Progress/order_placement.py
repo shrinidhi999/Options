@@ -30,7 +30,7 @@ def buy_order():
         orderparams = {
             "exchange": "NFO",
             "instrumenttype": "OPTIDX",
-            "tradingsymbol": "BANKNIFTY27JAN2237900CE",
+            "tradingsymbol": "BANKNIFTY27JAN2236400PE",
             "quantity": 25,
             "transactiontype": "BUY",
             "ordertype": "LIMIT",
@@ -38,8 +38,8 @@ def buy_order():
             "producttype": "CARRYFORWARD",
             "duration": "DAY",
             "price": "60",
-            # "stoploss":"20", todo - test this param
-            "symboltoken": "67912"
+            "triggerprice": "59",
+            "symboltoken": "67868"
         }
         orderId = obj.placeOrder(orderparams)
         print("The order id is: {}".format(orderId))
@@ -53,7 +53,7 @@ def buy_order_stop_loss():
         orderparams = {
             "exchange": "NFO",
             "instrumenttype": "OPTIDX",
-            "tradingsymbol": "BANKNIFTY27JAN2237900CE",
+            "tradingsymbol": "BANKNIFTY27JAN2236400PE",
             "quantity": 25,
             "transactiontype": "BUY",
             "ordertype": "STOPLOSS_LIMIT",  # "ordertype": "LIMIT",
@@ -62,8 +62,8 @@ def buy_order_stop_loss():
             "duration": "DAY",
             "price": "60",
             "triggerprice": "59",
-            # "stoploss":"20", todo - test this param
-            "symboltoken": "67912"
+            "stoploss": "20",  # todo - test this param
+            "symboltoken": "67868"
         }
         orderId = obj.placeOrder(orderparams)
         print("The order id is: {}".format(orderId))
@@ -71,30 +71,49 @@ def buy_order_stop_loss():
         print("Order placement failed: {}".format(e))
 
 
-def get_order_details():
+def get_order_details(order_id):
     orders = obj.orderBook()['data']
-    sample = None
     for ord in orders:
-        print(f"Order Id: {ord['orderid']}")
-        print(f"Symbol: {ord['tradingsymbol']}")
-        print(f"Price: {ord['price']}")
-        print(f"Order Status: {ord['status']}")
-        print("-------------")
+        if ord['orderid'] == order_id:
+            print(f"Order Id: {ord['orderid']}")
+            print(f"Symbol: {ord['tradingsymbol']}")
+            print(f"Price: {ord['price']}")
+            print(f"Order Status: {ord['status']}")
+            print(f"Order Text: {ord['text']}")
+            print("-------------")
 
 
-def sell_order(exit_price):
+def modify_order(order_id, current_price):
+    orderparams = {
+        "variety": "NORMAL",
+        "orderid": order_id,
+        "ordertype": "LIMIT",
+        "producttype": "CARRYFORWARD",
+        "transactiontype": "SELL",
+        "duration": "DAY",
+        "price": current_price,
+        "quantity": 25,
+        "tradingsymbol": "BANKNIFTY27JAN2236400PE",
+        "symboltoken": "67868",
+        "exchange": "NFO"
+    }
+
+    return obj.modifyOrder(orderparams)
+
+
+def sell_order(order_id, exit_price):
     try:
         orderparams = {
             "variety": "NORMAL",
-            "orderid": "210823000463560",
+            "orderid": order_id,
             "ordertype": "LIMIT",
             "producttype": "CARRYFORWARD",
             "transactiontype": "SELL",
             "duration": "DAY",
-            "price": exit_price,  # todo - check
-            "quantity": "1",
-            "tradingsymbol": "BANKNIFTY27JAN2237900CE",
-            "symboltoken": "67912",
+            "miit PRICE": exit_price,  # todo - check
+            "quantity": 25,
+            "tradingsymbol": "BANKNIFTY27JAN2236400PE",
+            "symboltoken": "67868",
             "exchange": "NFO"
         }
         orderId = obj.placeOrder(orderparams)
@@ -105,6 +124,7 @@ def sell_order(exit_price):
 
 get_account_details()
 buy_order()
-buy_order_stop_loss()
-get_order_details()
-sell_order(exit_price)
+# buy_order_stop_loss()
+get_order_details("220124000688087")
+# sell_order("220124000653844", 80)
+# modify_order("220124000688087", 80)
