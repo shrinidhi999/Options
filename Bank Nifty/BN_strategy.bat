@@ -1,4 +1,4 @@
 call conda activate cuda2
-python BN_ST.py 
+python src/BN_strategy.py 
 
 pause

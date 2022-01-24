@@ -2,6 +2,7 @@
 
 
 import math
+import sys
 import time
 import warnings
 from datetime import datetime as dt
@@ -13,6 +14,11 @@ import requests
 import yfinance as yf
 from plyer import notification
 from pytz import timezone
+from tqdm import tqdm
+
+from indicators import rsi, supertrend
+
+sys.path.append(r'Bank Nifty\src')
 
 warnings.filterwarnings("ignore")
 
@@ -39,83 +45,15 @@ signal_result_price = []
 
 rsi_upper_limit = 95
 rsi_lower_limit = 0.5
+
+st1_length = 7
+st1_factor = 1
+st2_length = 8
+st2_factor = 2
+st3_length = 9
+st3_factor = 3
+
 margin = 20
-
-
-def tr(data):
-    data["previous_close"] = data["Close"].shift(1)
-    data["high-low"] = abs(data["High"] - data["Low"])
-    data["high-pc"] = abs(data["High"] - data["previous_close"])
-    data["low-pc"] = abs(data["Low"] - data["previous_close"])
-    return data[["high-low", "high-pc", "low-pc"]].max(axis=1)
-
-
-def atr(data, period):
-    data["tr"] = tr(data)
-    return data["tr"].rolling(period).mean()
-
-
-def supertrend(df, period, atr_multiplier):
-    hl2 = (df["High"] + df["Low"]) / 2
-    df["atr"] = atr(df, period)
-    df["upperband"] = hl2 + (atr_multiplier * df["atr"])
-    df["lowerband"] = hl2 - (atr_multiplier * df["atr"])
-    df["in_uptrend"] = True
-
-    for current in range(1, len(df.index)):
-
-        previous = current - 1
-
-        if df["Close"][current] > df["upperband"][previous]:
-            df["in_uptrend"][current] = True
-
-        elif df["Close"][current] < df["lowerband"][previous]:
-            df["in_uptrend"][current] = False
-
-        else:
-            df["in_uptrend"][current] = df["in_uptrend"][previous]
-
-            if (
-                df["in_uptrend"][current]
-                and df["lowerband"][current] < df["lowerband"][previous]
-            ):
-                df["lowerband"][current] = df["lowerband"][previous]
-
-            if (
-                not df["in_uptrend"][current]
-                and df["upperband"][current] > df["upperband"][previous]
-            ):
-                df["upperband"][current] = df["upperband"][previous]
-    return df
-
-
-def rsi(df, periods=2, ema=True):
-    """
-    Returns a pd.Series with the relative strength index.
-    """
-
-    close_delta = df["Close"].diff()
-
-    # Make two series: one for lower closes and one for higher closes
-
-    up = close_delta.clip(lower=0)
-    down = -1 * close_delta.clip(upper=0)
-
-    if ema == True:
-        # Use exponential moving average
-        ma_up = up.ewm(com=periods - 1, adjust=True,
-                       min_periods=periods).mean()
-        ma_down = down.ewm(com=periods - 1, adjust=True,
-                           min_periods=periods).mean()
-
-    else:
-        # Use simple moving average
-        ma_up = up.rolling(window=periods, adjust=False).mean()
-        ma_down = down.rolling(window=periods, adjust=False).mean()
-
-    rsi = ma_up / ma_down
-    rsi = 100 - (100 / (1 + rsi))
-    return rsi
 
 
 def update_signal_vals(sig_time, sig_type, sig_price):
@@ -206,7 +144,11 @@ def alert(arr, timing, close_val, open_val, high_val, low_val, rsi_val):
 
 
 def download_data():
-    return yf.download(symbol, start=input, period="1d", interval=str(interval) + "m")
+    df = pd.read_csv(r'Bank Nifty\test data\NIFTY BANK Data.csv')
+    df = df.set_index('Datetime')
+    df.index = pd.to_datetime(df.index)
+    # df = df[df.index.year > 2018]
+    return df
 
 
 def get_results():
@@ -235,12 +177,12 @@ def test_code():
     # todo remove
 
     df = download_data()
-    df["ST_7"] = supertrend(df, 7, 1)["in_uptrend"]
-    df["ST_8"] = supertrend(df, 8, 2)["in_uptrend"]
-    df["ST_9"] = supertrend(df, 9, 3)["in_uptrend"]
+    df["ST_7"] = supertrend(df, st1_length, st1_factor)["in_uptrend"]
+    df["ST_8"] = supertrend(df, st2_length, st2_factor)["in_uptrend"]
+    df["ST_9"] = supertrend(df, st3_length, st3_factor)["in_uptrend"]
     df["RSI"] = rsi(df)
 
-    for i in range(len(df)):
+    for i in tqdm(range(len(df))):
         arr = df.iloc[i][["ST_7", "ST_8", "ST_9"]].values
         alert(
             arr,
