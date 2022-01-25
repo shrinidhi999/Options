@@ -3,6 +3,8 @@
 
 import math
 import sys
+
+sys.path.append(r'Bank Nifty\src')   # nopep8
 import time
 import warnings
 from datetime import datetime as dt
@@ -17,8 +19,6 @@ from pytz import timezone
 from tqdm import tqdm
 
 from indicators import rsi, supertrend
-
-sys.path.append(r'Bank Nifty\src')
 
 warnings.filterwarnings("ignore")
 
@@ -147,7 +147,7 @@ def download_data():
     df = pd.read_csv(r'Bank Nifty\test data\NIFTY BANK Data.csv')
     df = df.set_index('Datetime')
     df.index = pd.to_datetime(df.index)
-    # df = df[df.index.year > 2018]
+    df = df[df.index.year > 2018]
     return df
 
 

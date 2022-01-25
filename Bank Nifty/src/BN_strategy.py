@@ -1,12 +1,17 @@
+# todo - exception handling fr yf api, chk if df.tail() has current day data
+# consider 2 sts before exiting
+
 # pip install yfinance
 # pip install plyer
-# !pip install smartapi-python
-# !pip install websocket-client
+# pip install smartapi-python
+# pip install websocket-client
 
 import logging
 import math
 import os
 import sys
+
+sys.path.append(r'Bank Nifty\src')  # nopep8
 import time
 import warnings
 from datetime import datetime as dt
@@ -18,9 +23,9 @@ import yfinance as yf
 from plyer import notification
 from pytz import timezone
 
+from get_option_data import get_option_price
 from indicators import rsi, supertrend
-
-sys.path.append(r'Bank Nifty\src')
+from order_placement import buy_order, get_order_status
 
 warnings.filterwarnings("ignore")
 
@@ -36,10 +41,17 @@ present_day = (dt.now(timezone(time_zone)).today())
 shift = timedelta(max(1, (present_day.weekday() + 6) % 7 - 3))
 last_business_day = (present_day - shift).strftime("%Y-%m-%d")
 
-# last_business_day = "2022-01-20"
+weekly_expiry = "BANKNIFTY27JAN22"
+instrument_list = None
+
+# last_business_day = "2022-01-24"
 
 call_signal = False
 put_signal = False
+call_option_price = 0
+put_option_price = 0
+lot_size = 25
+units = 1
 
 title = "ALERT!"
 chat_id = "957717113"
@@ -97,10 +109,14 @@ def is_trading_time(timing):
             call_signal = False
             print(
                 f"Warning: Time Out \nCALL Exit: {timing.strftime(time_format)}")
+            set_notification(
+                f"Warning: Time Out \nCALL Exit: {timing.strftime(time_format)}")
 
         elif put_signal:
             put_signal = False
             print(
+                f"Warning: Time Out \nPUT Exit: {timing.strftime(time_format)}")
+            set_notification(
                 f"Warning: Time Out \nPUT Exit: {timing.strftime(time_format)}")
 
         else:
@@ -128,11 +144,11 @@ def download_data():
         logger.info(
             "---------------------------------------------------------------------------------------------")
         logger.info(
-            f"DF downloaded : {df.tail(3)}")
+            f"DF downloaded : {df.head(3)}")
         # Suppose the API called at 10.11am. The API returns 5m data till 10.10am and 1m data related to 10.11am.
         # since our logic is for 5min data, we need to drop the 1m data.
         if df.index[-1].minute % interval != 0:
-            df.drop(df.tail(1).index, inplace=True)
+            df.drop(df.index[-1], inplace=True)
         logger.info(
             f"DF updated : {df.tail(3)}")
 
@@ -217,6 +233,7 @@ def set_put_signal(super_trend_arr, super_trend_arr_old, timing, close_val, open
     if not any(super_trend_arr_old):
         msg = f"On going PUT Super Trend !!! {timing}, \nPUT Strike Price: {price} PE"
     else:
+        place_order("PE", price)
         msg = f"PUT SIGNAL !!! {timing}, \nPUT Strike Price: {price} PE"
 
     log_signal_msg(super_trend_arr, super_trend_arr_old,
@@ -235,17 +252,62 @@ def set_call_signal(super_trend_arr, super_trend_arr_old, timing, close_val, ope
     if super_trend_arr_old.all():
         msg = f"On going Call Super Trend !!! {timing},  \nCALL Strike Price: {price} CE"
     else:
+        place_order("CE", price)
         msg = f"CALL SIGNAL !!! {timing},  \nCALL Strike Price: {price} CE"
 
     log_signal_msg(super_trend_arr, super_trend_arr_old,
                    close_val, open_val, rsi_val, msg)
 
 
+def place_order(signal_type, price):
+    global call_option_price, put_option_price
+    order_id = None
+
+    if signal_type == "CE":
+        call_option_price = price
+    else:
+        put_option_price = price
+
+    option_tick = str(price) + signal_type
+    weekly_option_tick = weekly_expiry + option_tick
+
+    option_price = get_option_price(option_tick)
+    token = get_option_token(weekly_option_tick)
+
+    order_id = buy_order(weekly_option_tick, token,
+                         option_price, units * lot_size)
+
+    order_status = get_order_status(order_id)
+    msg = f"Order Status: {order_status}"
+    set_notification(msg)
+    print(msg)
+    logger.info(msg)
+
+
+def get_instrument_list():
+    global instrument_list
+
+    instrument_list = requests.get(
+        r'https://margincalculator.angelbroking.com/OpenAPI_File/files/OpenAPIScripMaster.json').json()
+
+
+def get_option_token(trading_symbol):
+    token = None
+    for tick in instrument_list:
+        if tick['symbol'] == trading_symbol:
+            token = tick['token']
+            break
+    return token
+
+
 def run_code():
+
     logger.info(
         f"Bank Nifty Strategy Started : {dt.now(timezone(time_zone)).strftime(time_format)}")
     logger.info(
         "---------------------------------------------------------------------------------------------")
+
+    get_instrument_list()
 
     while True:
         timing = dt.now(timezone(time_zone))
@@ -254,7 +316,7 @@ def run_code():
 
         res = timing.minute % interval
 
-        if res == 3:
+        if is_trading_time(timing) and res == 1:
             sleep_time_in_secs = (60 - timing.second) + (interval - 1) * 60
             print(
                 f"Sleep Time: {(interval - 1)} min {(60 - timing.second)} sec")
@@ -280,8 +342,8 @@ def run_code():
             )
             time.sleep(sleep_time_in_secs)
         else:
-            diff = 3 - res
-            sleep_time = diff if diff >= 0 else res
+            res = 5 if res == 0 else res
+            sleep_time = interval - res + 1
             print(f"Sleep Time: {sleep_time} min")
             time.sleep(sleep_time * 60)
 

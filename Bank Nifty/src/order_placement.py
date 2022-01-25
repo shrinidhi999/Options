@@ -1,16 +1,10 @@
 # !pip install smartapi-python
 # !pip install websocket-client
 
-# or from smartapi.smartConnect import SmartConnect
 from smartapi import SmartConnect
-# import smartapi.smartExceptions(for smartExceptions)
-
-# create object of call
-obj = None
 
 
 def get_account_details():
-    global obj
 
     obj = SmartConnect(api_key="sKBuEyAI")
     # login api call
@@ -24,31 +18,57 @@ def get_account_details():
     # fetch User Profile
     userProfile = obj.getProfile(refreshToken)
 
+    return obj
 
-def buy_order():
+
+def robo_order():
+    obj = get_account_details()
+
+    orderparams = {
+        "variety": "ROBO",
+        "tradingsymbol": "BANKNIFTY27JAN2236400PE",
+        "symboltoken": 67868,
+        "transactiontype": "BUY",
+        "exchange": "NFO",
+        "ordertype": "LIMIT",
+        "producttype": "BO",
+        "duration": "DAY",
+        "price": 10.2,
+        "squareoff": 10.0,
+        "stoploss": 10.0,
+        "quantity": 25
+    }
+
+    return obj.placeOrder(orderparams)
+
+
+def buy_order(tradingsymbol, token, price, quantity):
+    obj = get_account_details()
+
     try:
         orderparams = {
             "exchange": "NFO",
             "instrumenttype": "OPTIDX",
-            "tradingsymbol": "BANKNIFTY27JAN2236400PE",
-            "quantity": 25,
+            "tradingsymbol": tradingsymbol,  # "BANKNIFTY27JAN2236400PE",
+            "quantity": quantity,
             "transactiontype": "BUY",
             "ordertype": "LIMIT",
             "variety": "NORMAL",
             "producttype": "CARRYFORWARD",
             "duration": "DAY",
-            "price": "60",
-            "triggerprice": "59",
-            "symboltoken": "67868"
+            "price": price,  # "60",
+            "symboltoken": token
         }
-        orderId = obj.placeOrder(orderparams)
-        print("The order id is: {}".format(orderId))
+        return obj.placeOrder(orderparams)
     except Exception as e:
         print("Order placement failed: {}".format(e))
 
 
 # not tested
+
 def buy_order_stop_loss():
+    obj = get_account_details()
+
     try:
         orderparams = {
             "exchange": "NFO",
@@ -71,7 +91,19 @@ def buy_order_stop_loss():
         print("Order placement failed: {}".format(e))
 
 
+def get_order_status(order_id):
+    obj = get_account_details()
+
+    orders = obj.orderBook()['data']
+    for ord in orders:
+        if ord['orderid'] == order_id:
+            return f"Order Status: {ord['status']}" + f"Order Text: {ord['text']}"
+    return 'Not Found'
+
+
 def get_order_details(order_id):
+    obj = get_account_details()
+
     orders = obj.orderBook()['data']
     for ord in orders:
         if ord['orderid'] == order_id:
@@ -83,7 +115,21 @@ def get_order_details(order_id):
             print("-------------")
 
 
+def get_order_details_full(order_id):
+    obj = get_account_details()
+
+    orders = obj.orderBook()['data']
+    for ord in orders:
+        if ord['orderid'] == order_id:
+            print(ord)
+
+
+# not tested
+
+
 def modify_order(order_id, current_price):
+    obj = get_account_details()
+
     orderparams = {
         "variety": "NORMAL",
         "orderid": order_id,
@@ -100,8 +146,12 @@ def modify_order(order_id, current_price):
 
     return obj.modifyOrder(orderparams)
 
+# not tested
+
 
 def sell_order(order_id, exit_price):
+    obj = get_account_details()
+
     try:
         orderparams = {
             "variety": "NORMAL",
@@ -122,9 +172,12 @@ def sell_order(order_id, exit_price):
         print("Order placement failed: {}".format(e))
 
 
-get_account_details()
-buy_order()
-# buy_order_stop_loss()
-get_order_details("220124000688087")
-# sell_order("220124000653844", 80)
-# modify_order("220124000688087", 80)
+if __name__ == "__main__":
+    # buy_order("BANKNIFTY27JAN2236400PE", 67868, 21, 25)
+    # buy_order_stop_loss()
+    oid = robo_order()
+    get_order_details(oid)
+    get_order_details_full(oid)
+    # get_order_status("220124000688087")
+    # sell_order("220124000653844", 80)
+    # modify_order("220124000688087", 80)

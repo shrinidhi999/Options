@@ -1,23 +1,19 @@
 # pip install yfinance
 
-
 import math
 import sys
+
+sys.path.append(r'Bank Nifty\src')  # nopep8
 import time
 import warnings
 from datetime import datetime as dt
 from datetime import time, timedelta
 
-import numpy as np
 import pandas as pd
-import requests
 import yfinance as yf
-from plyer import notification
 from pytz import timezone
 
 from indicators import rsi, supertrend
-
-sys.path.append(r'Bank Nifty\src')
 
 warnings.filterwarnings("ignore")
 
