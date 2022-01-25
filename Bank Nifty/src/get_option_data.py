@@ -19,5 +19,5 @@ def get_option_price(option):
 
 
 if __name__ == "__main__":
-    option_strike = "36400PE"
+    option_strike = "38200CE"
     print(get_option_price(option_strike))

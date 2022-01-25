@@ -107,32 +107,28 @@ def is_trading_time(timing):
     if timing.hour < 10 or is_closing_time:
         if call_signal:
             call_signal = False
-            print(
-                f"Warning: Time Out \nCALL Exit: {timing.strftime(time_format)}")
-            set_notification(
-                f"Warning: Time Out \nCALL Exit: {timing.strftime(time_format)}")
+            log_signal_msg(
+                True, msg=f"Warning: Time Out \nCALL Exit: {timing.strftime(time_format)}")
 
         elif put_signal:
             put_signal = False
-            print(
-                f"Warning: Time Out \nPUT Exit: {timing.strftime(time_format)}")
-            set_notification(
-                f"Warning: Time Out \nPUT Exit: {timing.strftime(time_format)}")
-
+            log_signal_msg(
+                True, msg=f"Warning: Time Out \nPUT Exit: {timing.strftime(time_format)}")
         else:
             print("Out of trade timings")
         return False
     return True
 
 
-def log_signal_msg(super_trend_arr, super_trend_arr_old, close_val, open_val, rsi_val, msg):
+def log_signal_msg(logging_required, super_trend_arr=None, super_trend_arr_old=None, close_val=None, open_val=None, rsi_val=None, msg=None):
     msg = f"Interval : {interval} min \n" + msg
     set_notification(msg)
     print(msg)
-    logger.info(
-        f"Message : {msg}, Close: {close_val}, Open: {open_val}, RSI: {rsi_val}, super_trend_arr: {super_trend_arr}, super_trend_arr_old: {super_trend_arr_old}")
-    logger.info(
-        "---------------------------------------------------------------------------------------------")
+    if logging_required:
+        logger.info(
+            f"Message : {msg}, Close: {close_val}, Open: {open_val}, RSI: {rsi_val}, super_trend_arr: {super_trend_arr}, super_trend_arr_old: {super_trend_arr_old}")
+        logger.info(
+            "---------------------------------------------------------------------------------------------")
 
 
 def download_data():
@@ -207,7 +203,7 @@ def exit_put_signal(super_trend_arr, super_trend_arr_old, timing, close_val, ope
     put_signal = False
     msg = f"PUT EXIT !!! {timing}"
 
-    log_signal_msg(super_trend_arr, super_trend_arr_old,
+    log_signal_msg(True, super_trend_arr, super_trend_arr_old,
                    close_val, open_val, rsi_val, msg)
 
 
@@ -217,7 +213,7 @@ def exit_call_signal(super_trend_arr, super_trend_arr_old, timing, close_val, op
     call_signal = False
     msg = f"CALL EXIT !!! {timing}"
 
-    log_signal_msg(super_trend_arr, super_trend_arr_old,
+    log_signal_msg(True, super_trend_arr, super_trend_arr_old,
                    close_val, open_val, rsi_val, msg)
 
 
@@ -231,12 +227,13 @@ def set_put_signal(super_trend_arr, super_trend_arr_old, timing, close_val, open
     price -= margin_strike_price_units
 
     if not any(super_trend_arr_old):
-        msg = f"On going PUT Super Trend !!! {timing}, \nPUT Strike Price: {price} PE"
+        option_price = get_option_price(str(price) + "PE")
+        msg = f"On going PUT Super Trend !!! {timing}, \nPUT Strike Price: {price} PE, \nOption Price:  {option_price}"
     else:
         place_order("PE", price)
         msg = f"PUT SIGNAL !!! {timing}, \nPUT Strike Price: {price} PE"
 
-    log_signal_msg(super_trend_arr, super_trend_arr_old,
+    log_signal_msg(True, super_trend_arr, super_trend_arr_old,
                    close_val, open_val, rsi_val, msg)
 
 
@@ -250,12 +247,13 @@ def set_call_signal(super_trend_arr, super_trend_arr_old, timing, close_val, ope
     price += margin_strike_price_units
 
     if super_trend_arr_old.all():
-        msg = f"On going Call Super Trend !!! {timing},  \nCALL Strike Price: {price} CE"
+        option_price = get_option_price(str(price) + "CE")
+        msg = f"On going Call Super Trend !!! {timing},  \nCALL Strike Price: {price} CE, \nOption Price:  {option_price}"
     else:
         place_order("CE", price)
         msg = f"CALL SIGNAL !!! {timing},  \nCALL Strike Price: {price} CE"
 
-    log_signal_msg(super_trend_arr, super_trend_arr_old,
+    log_signal_msg(True, super_trend_arr, super_trend_arr_old,
                    close_val, open_val, rsi_val, msg)
 
 
@@ -279,9 +277,7 @@ def place_order(signal_type, price):
 
     order_status = get_order_status(order_id)
     msg = f"Order Status: {order_status}"
-    set_notification(msg)
-    print(msg)
-    logger.info(msg)
+    log_signal_msg(True, msg=msg)
 
 
 def get_instrument_list():
