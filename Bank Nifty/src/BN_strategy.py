@@ -6,6 +6,8 @@
 # pip install smartapi-python
 # pip install websocket-client
 
+# region imports
+
 import logging
 import math
 import os
@@ -29,23 +31,27 @@ from order_placement import buy_order, get_order_status
 
 warnings.filterwarnings("ignore")
 
+# endregion
+
+# region vars
+
+# region time vars
 
 time_zone = "Asia/Kolkata"
 time_format = "%d-%m-%Y %H:%M"
 interval = 5
-symbol = "^NSEBANK"
-# symbol = "^DJUSBK"
-
 present_day = (dt.now(timezone(time_zone)).today())
 
 shift = timedelta(max(1, (present_day.weekday() + 6) % 7 - 3))
 last_business_day = (present_day - shift).strftime("%Y-%m-%d")
+# last_business_day = "2022-01-24"
+
+# endregion
+
+# region order placement vars
 
 weekly_expiry = "BANKNIFTY27JAN22"
 instrument_list = None
-
-# last_business_day = "2022-01-24"
-
 call_signal = False
 put_signal = False
 call_option_price = 0
@@ -53,11 +59,22 @@ put_option_price = 0
 lot_size = 25
 units = 1
 
+# endregion
+
+# region notification and log vars
+
 title = "ALERT!"
 chat_id = "957717113"
 token = "5013995887:AAHUu6qsNzw1Bsbq46LThezZBxbGn-E12Tw"
 url = f"https://api.telegram.org/bot{token}"
+logger = None
 
+# endregion
+
+# region strategy vars
+
+symbol = "^NSEBANK"
+# symbol = "^DJUSBK"
 
 rsi_upper_limit = 95
 rsi_lower_limit = 0.5
@@ -72,7 +89,13 @@ st2_factor = 2
 st3_length = 9
 st3_factor = 3
 
-logger = None
+# endregion
+
+# endregion
+
+# region methods
+
+# region Notification and Logging
 
 
 def get_logger():
@@ -99,27 +122,6 @@ def send_mobile_notification(msg):
     requests.get(url + "/sendMessage", params=params, verify=False)
 
 
-def is_trading_time(timing):
-    global call_signal, put_signal
-
-    is_closing_time = dtm(timing.hour, timing.minute) >= dtm(14, 30)
-
-    if timing.hour < 10 or is_closing_time:
-        if call_signal:
-            call_signal = False
-            log_signal_msg(
-                True, msg=f"Warning: Time Out \nCALL Exit: {timing.strftime(time_format)}")
-
-        elif put_signal:
-            put_signal = False
-            log_signal_msg(
-                True, msg=f"Warning: Time Out \nPUT Exit: {timing.strftime(time_format)}")
-        else:
-            print("Out of trade timings")
-        return False
-    return True
-
-
 def log_signal_msg(logging_required, super_trend_arr=None, super_trend_arr_old=None, close_val=None, open_val=None, rsi_val=None, msg=None):
     msg = f"Interval : {interval} min \n" + msg
     set_notification(msg)
@@ -129,6 +131,9 @@ def log_signal_msg(logging_required, super_trend_arr=None, super_trend_arr_old=N
             f"Message : {msg}, Close: {close_val}, Open: {open_val}, RSI: {rsi_val}, super_trend_arr: {super_trend_arr}, super_trend_arr_old: {super_trend_arr_old}")
         logger.info(
             "---------------------------------------------------------------------------------------------")
+# endregion
+
+# region Data download
 
 
 def download_data():
@@ -154,30 +159,48 @@ def download_data():
         logger.error(f"Error: {e.message}")
 
     return df
+# endregion
+
+# region Strategy
+
+
+def is_trading_time(timing):
+    global call_signal, put_signal
+
+    is_closing_time = dtm(timing.hour, timing.minute) >= dtm(14, 30)
+
+    if timing.hour < 10 or is_closing_time:
+        if call_signal:
+            call_signal = False
+            log_signal_msg(
+                True, msg=f"Warning: Time Out \nCALL Exit: {timing.strftime(time_format)}")
+
+        elif put_signal:
+            put_signal = False
+            log_signal_msg(
+                True, msg=f"Warning: Time Out \nPUT Exit: {timing.strftime(time_format)}")
+        else:
+            print("Out of trade timings")
+        return False
+    return True
 
 
 def signal_alert(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val):
-    global call_signal, put_signal
-
     print(f"Time: {timing}")
     timing = timing.strftime(time_format)
 
     logger.info(
         f"Message : 5min Logging, Close: {close_val}, Open: {open_val}, RSI: {rsi_val}, super_trend_arr: {super_trend_arr}, super_trend_arr_old: {super_trend_arr_old}")
-    # print(f"super_trend_arr: {super_trend_arr}")
-    # print(f"super_trend_arr_old: {super_trend_arr_old}")
-    # print(f"rsi_val: {rsi_val}")
-    # print(f"close_val: {close_val}")
-    # print(f"open_val: {open_val}")
 
-    if (
-        super_trend_arr.all()
-        and call_signal is False
-        and close_val > open_val
-        and rsi_val < rsi_upper_limit
-    ):
-        set_call_signal(super_trend_arr, super_trend_arr_old,
-                        timing, close_val, open_val, rsi_val)
+    call_strategy(super_trend_arr, super_trend_arr_old,
+                  timing, close_val, open_val, rsi_val)
+
+    put_strategy(super_trend_arr, super_trend_arr_old,
+                 timing, close_val, open_val, rsi_val)
+
+
+def put_strategy(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val):
+    global put_signal
 
     if (
         not any(super_trend_arr)
@@ -188,13 +211,26 @@ def signal_alert(super_trend_arr, super_trend_arr_old, timing, close_val, open_v
         set_put_signal(super_trend_arr, super_trend_arr_old,
                        timing, close_val, open_val, rsi_val)
 
-    if call_signal and not super_trend_arr.all():
-        exit_call_signal(super_trend_arr, super_trend_arr_old,
-                         timing, close_val, open_val, rsi_val)
-
     if put_signal and super_trend_arr.any():
         exit_put_signal(super_trend_arr, super_trend_arr_old,
                         timing, close_val, open_val, rsi_val)
+
+
+def call_strategy(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val):
+    global call_signal
+
+    if (
+        super_trend_arr.all()
+        and call_signal is False
+        and close_val > open_val
+        and rsi_val < rsi_upper_limit
+    ):
+        set_call_signal(super_trend_arr, super_trend_arr_old,
+                        timing, close_val, open_val, rsi_val)
+
+    if call_signal and not super_trend_arr.all():
+        exit_call_signal(super_trend_arr, super_trend_arr_old,
+                         timing, close_val, open_val, rsi_val)
 
 
 def exit_put_signal(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val):
@@ -256,6 +292,26 @@ def set_call_signal(super_trend_arr, super_trend_arr_old, timing, close_val, ope
     log_signal_msg(True, super_trend_arr, super_trend_arr_old,
                    close_val, open_val, rsi_val, msg)
 
+# endregion
+
+# region Order placement
+
+
+def get_instrument_list():
+    global instrument_list
+
+    instrument_list = requests.get(
+        r'https://margincalculator.angelbroking.com/OpenAPI_File/files/OpenAPIScripMaster.json').json()
+
+
+def get_option_token(trading_symbol):
+    token = None
+    for tick in instrument_list:
+        if tick['symbol'] == trading_symbol:
+            token = tick['token']
+            break
+    return token
+
 
 def place_order(signal_type, price):
     global call_option_price, put_option_price
@@ -279,21 +335,9 @@ def place_order(signal_type, price):
     msg = f"Order Status: {order_status}"
     log_signal_msg(True, msg=msg)
 
+# endregion
 
-def get_instrument_list():
-    global instrument_list
-
-    instrument_list = requests.get(
-        r'https://margincalculator.angelbroking.com/OpenAPI_File/files/OpenAPIScripMaster.json').json()
-
-
-def get_option_token(trading_symbol):
-    token = None
-    for tick in instrument_list:
-        if tick['symbol'] == trading_symbol:
-            token = tick['token']
-            break
-    return token
+# region run method
 
 
 def run_code():
@@ -343,6 +387,14 @@ def run_code():
             print(f"Sleep Time: {sleep_time} min")
             time.sleep(sleep_time * 60)
 
+# endregion
+
+# region Method call
+
 
 logger = get_logger()
 run_code()
+
+# endregion
+
+# endregion

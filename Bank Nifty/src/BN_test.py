@@ -1,5 +1,6 @@
 # pip install yfinance
 
+# region imports
 import math
 import sys
 
@@ -17,6 +18,9 @@ from indicators import rsi, supertrend
 
 warnings.filterwarnings("ignore")
 
+# endregion
+
+# region test vars
 
 interval = 5
 symbol = "^NSEBANK"
@@ -38,9 +42,24 @@ signal_strike_price = []
 signal_is_correct = []
 signal_result_price = []
 
+# endregion
+
+# region strategy vars
+
 rsi_upper_limit = 95
 rsi_lower_limit = 0.5
 margin = 20
+
+st1_length = 7
+st1_factor = 1
+st2_length = 8
+st2_factor = 2
+st3_length = 9
+st3_factor = 3
+
+# endregion
+
+# region methods
 
 
 def update_signal_vals(sig_time, sig_type, sig_price):
@@ -72,22 +91,30 @@ def alert(arr, timing, close_val, open_val, high_val, low_val, rsi_val):
 
     if timing.hour < 10 or is_closing_time:
 
-        if call_signal:
-            call_signal = False
-            signal_end_time.append(timing.strftime("%d-%m-%Y %H:%M"))
-            # print(f"CALL Exit: {timing}")
-            if len(signal_strike_price) > len(signal_result_price):
-                update_signal_result(0, False)
-
-        elif put_signal:
-            put_signal = False
-            signal_end_time.append(timing.strftime("%d-%m-%Y %H:%M"))
-            # print(f"PUT Exit: {timing}")
-            if len(signal_strike_price) > len(signal_result_price):
-                update_signal_result(0, False)
+        set_out_of_trade_vals(timing)
         return
 
     timing = timing.strftime("%d-%m-%Y %H:%M")
+    signal_strategy(arr, timing, close_val, open_val, rsi_val)
+
+
+def set_out_of_trade_vals(timing):
+    global call_signal, put_signal, call_strike_price, put_strike_price, signal_end_time
+    if call_signal:
+        call_signal = False
+        signal_end_time.append(timing.strftime("%d-%m-%Y %H:%M"))
+        if len(signal_strike_price) > len(signal_result_price):
+            update_signal_result(0, False)
+
+    elif put_signal:
+        put_signal = False
+        signal_end_time.append(timing.strftime("%d-%m-%Y %H:%M"))
+        if len(signal_strike_price) > len(signal_result_price):
+            update_signal_result(0, False)
+
+
+def signal_strategy(arr, timing, close_val, open_val, rsi_val):
+    global call_signal, put_signal, call_strike_price, put_strike_price, signal_end_time
 
     if (
         arr.all()
@@ -99,7 +126,6 @@ def alert(arr, timing, close_val, open_val, high_val, low_val, rsi_val):
         call_strike_price = close_val
         price = int(math.ceil(close_val / 100.0)) * 100
         price += 100
-        # print(f"CALL Signal: {timing}, \nCALL Strike Price: {price}")
         update_signal_vals(timing, "CALL", close_val)
 
     if (
@@ -112,26 +138,30 @@ def alert(arr, timing, close_val, open_val, high_val, low_val, rsi_val):
         put_strike_price = close_val
         price = int(math.floor(close_val / 100.0)) * 100
         price -= 100
-        # print(f"PUT Signal: {timing}, \nPUT Strike Price: {price}")
         update_signal_vals(timing, "PUT", close_val)
 
     if call_signal and not arr.all():
         call_signal = False
         signal_end_time.append(timing)
-        # print(f"CALL Exit: {timing}")
         if len(signal_strike_price) > len(signal_result_price):
             update_signal_result(0, False)
 
     if put_signal and arr.any():
         put_signal = False
         signal_end_time.append(timing)
-        # print(f"PUT Exit: {timing}")
         if len(signal_strike_price) > len(signal_result_price):
             update_signal_result(0, False)
 
 
 def download_data():
-    return yf.download(symbol, start=input, period="1d", interval=str(interval) + "m")
+    df = None
+    try:
+        df = yf.download(symbol, start=input,
+                         period="1d", interval=str(interval) + "m")
+
+    except Exception as e:
+        print(e.message)
+    return df
 
 
 def get_results():
@@ -160,9 +190,11 @@ def test_code():
     # todo remove
 
     df = download_data()
-    df["ST_7"] = supertrend(df, 7, 1)["in_uptrend"]
-    df["ST_8"] = supertrend(df, 8, 2)["in_uptrend"]
-    df["ST_9"] = supertrend(df, 9, 3)["in_uptrend"]
+
+    df["ST_7"] = supertrend(df, st1_length, st1_factor)["in_uptrend"]
+    df["ST_8"] = supertrend(df, st2_length, st2_factor)["in_uptrend"]
+    df["ST_9"] = supertrend(df, st3_length, st3_factor)["in_uptrend"]
+
     df["RSI"] = rsi(df)
 
     for i in range(len(df)):
@@ -180,3 +212,5 @@ def test_code():
 
 
 test_code()
+
+# endregion
