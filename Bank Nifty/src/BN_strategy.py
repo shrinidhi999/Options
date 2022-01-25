@@ -22,12 +22,11 @@ from datetime import timedelta
 
 import requests
 import yfinance as yf
-from plyer import notification
-from pytz import timezone
-
 from get_option_data import get_option_price
 from indicators import rsi, supertrend
-from order_placement import buy_order, get_order_status
+from order_placement import buy_order, get_order_status, get_instrument_list
+from plyer import notification
+from pytz import timezone
 
 warnings.filterwarnings("ignore")
 
@@ -297,13 +296,6 @@ def set_call_signal(super_trend_arr, super_trend_arr_old, timing, close_val, ope
 # region Order placement
 
 
-def get_instrument_list():
-    global instrument_list
-
-    instrument_list = requests.get(
-        r'https://margincalculator.angelbroking.com/OpenAPI_File/files/OpenAPIScripMaster.json').json()
-
-
 def get_option_token(trading_symbol):
     token = None
     for tick in instrument_list:
@@ -342,12 +334,17 @@ def place_order(signal_type, price):
 
 def run_code():
 
+    global instrument_list
+    instrument_list = get_instrument_list()
+
     logger.info(
         f"Bank Nifty Strategy Started : {dt.now(timezone(time_zone)).strftime(time_format)}")
+
+    if len(instrument_list) > 0:
+        logger.info("Instrument list downloaded")
+
     logger.info(
         "---------------------------------------------------------------------------------------------")
-
-    get_instrument_list()
 
     while True:
         timing = dt.now(timezone(time_zone))

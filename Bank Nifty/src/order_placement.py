@@ -1,7 +1,13 @@
 # !pip install smartapi-python
 # !pip install websocket-client
-
+import requests
 from smartapi import SmartConnect
+
+
+def get_instrument_list():
+
+    return requests.get(
+        r'https://margincalculator.angelbroking.com/OpenAPI_File/files/OpenAPIScripMaster.json').json()
 
 
 def get_account_details():

@@ -5,7 +5,7 @@
 import math
 import sys
 
-sys.path.append(r'Bank Nifty\src')   # nopep8
+sys.path.append(r'Bank Nifty\src')  # nopep8
 import time
 import warnings
 from datetime import datetime as dt
@@ -29,10 +29,6 @@ warnings.filterwarnings("ignore")
 
 interval = 5
 symbol = "^NSEBANK"
-
-input = (dt.now(timezone("Asia/Kolkata")).today() -
-         timedelta(days=59)).strftime("%Y-%m-%d")
-# input = "2022-01-14"
 
 call_signal = False
 put_signal = False
