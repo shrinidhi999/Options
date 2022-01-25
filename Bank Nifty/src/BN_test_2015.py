@@ -93,21 +93,32 @@ def alert(arr, timing, close_val, open_val, high_val, low_val, rsi_val):
     is_closing_time = time(timing.hour, timing.minute) >= time(14, 30)
 
     if timing.hour < 10 or is_closing_time:
-
-        if call_signal:
-            call_signal = False
-            signal_end_time.append(timing.strftime("%d-%m-%Y %H:%M"))
-            if len(signal_strike_price) > len(signal_result_price):
-                update_signal_result(0, False)
-
-        elif put_signal:
-            put_signal = False
-            signal_end_time.append(timing.strftime("%d-%m-%Y %H:%M"))
-            if len(signal_strike_price) > len(signal_result_price):
-                update_signal_result(0, False)
+        set_out_of_trade_vals(timing)
         return
 
     timing = timing.strftime("%d-%m-%Y %H:%M")
+
+    signal_strategy(arr, timing, close_val, open_val, rsi_val)
+
+
+def set_out_of_trade_vals(timing):
+    global call_signal, put_signal, call_strike_price, put_strike_price, signal_end_time
+
+    if call_signal:
+        call_signal = False
+        signal_end_time.append(timing.strftime("%d-%m-%Y %H:%M"))
+        if len(signal_strike_price) > len(signal_result_price):
+            update_signal_result(0, False)
+
+    elif put_signal:
+        put_signal = False
+        signal_end_time.append(timing.strftime("%d-%m-%Y %H:%M"))
+        if len(signal_strike_price) > len(signal_result_price):
+            update_signal_result(0, False)
+
+
+def signal_strategy(arr, timing, close_val, open_val, rsi_val):
+    global call_signal, put_signal, call_strike_price, put_strike_price, signal_end_time
 
     if (
         arr.all()
