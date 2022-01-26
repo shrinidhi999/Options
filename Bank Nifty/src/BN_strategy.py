@@ -8,12 +8,13 @@
 
 # region imports
 
-import logging
-import math
-import os
 import sys
 
 sys.path.append(r'Bank Nifty\src')  # nopep8
+
+import logging
+import math
+import os
 import time
 import warnings
 from datetime import datetime as dt
@@ -22,11 +23,12 @@ from datetime import timedelta
 
 import requests
 import yfinance as yf
-from get_option_data import get_option_price
-from indicators import rsi, supertrend
-from order_placement import buy_order, get_order_status, get_instrument_list
 from plyer import notification
 from pytz import timezone
+
+from get_option_data import get_option_price
+from indicators import rsi, supertrend
+from order_placement import buy_order, get_instrument_list, get_order_status
 
 warnings.filterwarnings("ignore")
 
@@ -49,7 +51,7 @@ last_business_day = (present_day - shift).strftime("%Y-%m-%d")
 
 # region order placement vars
 
-weekly_expiry = "BANKNIFTY27JAN22"
+weekly_expiry = "BANKNIFTY03FEB22"
 instrument_list = None
 call_signal = False
 put_signal = False
@@ -258,15 +260,15 @@ def set_put_signal(super_trend_arr, super_trend_arr_old, timing, close_val, open
     put_signal = True
     msg = None
 
-    price = int(math.floor(close_val / 100.0)) * 100
-    price -= margin_strike_price_units
+    strike_price = int(math.floor(close_val / 100.0)) * 100
+    strike_price -= margin_strike_price_units
+    option_price = get_option_price(str(strike_price) + "PE")
 
     if not any(super_trend_arr_old):
-        option_price = get_option_price(str(price) + "PE")
-        msg = f"On going PUT Super Trend !!! {timing}, \nPUT Strike Price: {price} PE, \nOption Price:  {option_price}"
+        msg = f"On going PUT Super Trend !!! {timing}, \nPUT Strike Price: {strike_price} PE, \nOption Price:  {option_price}"
     else:
-        place_order("PE", price)
-        msg = f"PUT SIGNAL !!! {timing}, \nPUT Strike Price: {price} PE"
+        place_order("PE", strike_price, option_price)
+        msg = f"PUT SIGNAL !!! {timing}, \nPUT Strike Price: {strike_price} PE"
 
     log_signal_msg(True, super_trend_arr, super_trend_arr_old,
                    close_val, open_val, rsi_val, msg)
@@ -278,15 +280,15 @@ def set_call_signal(super_trend_arr, super_trend_arr_old, timing, close_val, ope
     call_signal = True
     msg = None
 
-    price = int(math.ceil(close_val / 100.0)) * 100
-    price += margin_strike_price_units
+    strike_price = int(math.ceil(close_val / 100.0)) * 100
+    strike_price += margin_strike_price_units
+    option_price = get_option_price(str(strike_price) + "CE")
 
     if super_trend_arr_old.all():
-        option_price = get_option_price(str(price) + "CE")
-        msg = f"On going Call Super Trend !!! {timing},  \nCALL Strike Price: {price} CE, \nOption Price:  {option_price}"
+        msg = f"On going Call Super Trend !!! {timing},  \nCALL Strike Price: {strike_price} CE, \nOption Price:  {option_price}"
     else:
-        place_order("CE", price)
-        msg = f"CALL SIGNAL !!! {timing},  \nCALL Strike Price: {price} CE"
+        place_order("CE", strike_price, option_price)
+        msg = f"CALL SIGNAL !!! {timing},  \nCALL Strike Price: {strike_price} CE"
 
     log_signal_msg(True, super_trend_arr, super_trend_arr_old,
                    close_val, open_val, rsi_val, msg)
@@ -305,19 +307,18 @@ def get_option_token(trading_symbol):
     return token
 
 
-def place_order(signal_type, price):
+def place_order(signal_type, strike_price, option_price):
     global call_option_price, put_option_price
     order_id = None
 
     if signal_type == "CE":
-        call_option_price = price
+        call_option_price = strike_price
     else:
-        put_option_price = price
+        put_option_price = strike_price
 
-    option_tick = str(price) + signal_type
+    option_tick = str(strike_price) + signal_type
     weekly_option_tick = weekly_expiry + option_tick
 
-    option_price = get_option_price(option_tick)
     token = get_option_token(weekly_option_tick)
 
     order_id = buy_order(weekly_option_tick, token,
