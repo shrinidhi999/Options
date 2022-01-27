@@ -1,5 +1,5 @@
-# todo - exception handling fr yf api, chk if df.tail() has current day data
-# consider 2 sts before exiting
+# todo - exception handling fr yf api, add a chk to determine if df.tail() has current day data
+
 
 # pip install yfinance
 # pip install plyer
@@ -28,7 +28,7 @@ from pytz import timezone
 
 from get_option_data import get_option_price
 from indicators import rsi, supertrend
-from order_placement import buy_order, get_instrument_list, get_order_status
+from order_placement import buy_order, get_instrument_list, get_order_status, sell_order_limit, sell_order_market, cancel_order
 
 warnings.filterwarnings("ignore")
 
@@ -45,7 +45,7 @@ present_day = (dt.now(timezone(time_zone)).today())
 
 shift = timedelta(max(1, (present_day.weekday() + 6) % 7 - 3))
 last_business_day = (present_day - shift).strftime("%Y-%m-%d")
-# last_business_day = "2022-01-24"
+# last_business_day = "2022-01-25"
 
 # endregion
 
@@ -57,8 +57,11 @@ call_signal = False
 put_signal = False
 call_option_price = 0
 put_option_price = 0
-lot_size = 25
-units = 1
+trading_symbol = None
+quantity = 25
+buy_order_id = None
+sell_order_id = None
+margin = 20
 
 # endregion
 
@@ -79,7 +82,7 @@ symbol = "^NSEBANK"
 
 rsi_upper_limit = 95
 rsi_lower_limit = 0.5
-margin_strike_price_units = 300
+margin_strike_price_units = 400
 rsi_st_index = -1
 val_index = -1
 
@@ -238,6 +241,8 @@ def exit_put_signal(super_trend_arr, super_trend_arr_old, timing, close_val, ope
     global put_signal
 
     put_signal = False
+    exit_order()
+
     msg = f"PUT EXIT !!! {timing}"
 
     log_signal_msg(True, super_trend_arr, super_trend_arr_old,
@@ -248,6 +253,8 @@ def exit_call_signal(super_trend_arr, super_trend_arr_old, timing, close_val, op
     global call_signal
 
     call_signal = False
+    exit_order()
+
     msg = f"CALL EXIT !!! {timing}"
 
     log_signal_msg(True, super_trend_arr, super_trend_arr_old,
@@ -308,8 +315,7 @@ def get_option_token(trading_symbol):
 
 
 def place_order(signal_type, strike_price, option_price):
-    global call_option_price, put_option_price
-    order_id = None
+    global call_option_price, put_option_price, buy_order_id, sell_order_id, trading_symbol
 
     if signal_type == "CE":
         call_option_price = strike_price
@@ -317,29 +323,71 @@ def place_order(signal_type, strike_price, option_price):
         put_option_price = strike_price
 
     option_tick = str(strike_price) + signal_type
-    weekly_option_tick = weekly_expiry + option_tick
+    trading_symbol = weekly_expiry + option_tick
 
-    token = get_option_token(weekly_option_tick)
+    token = get_option_token(trading_symbol)
 
-    order_id = buy_order(weekly_option_tick, token,
-                         option_price, units * lot_size)
+    buy_result = buy_order(trading_symbol, token,
+                           option_price, quantity)
 
-    order_status = get_order_status(order_id)
-    msg = f"Order Status: {order_status}"
-    log_signal_msg(True, msg=msg)
+    if buy_result['status'] == 201:
+
+        buy_order_id = buy_result['order_id']
+        buy_order_status = get_order_status(buy_order_id)
+
+        if 'complete' in buy_order_status:
+            sell_result = sell_order_limit(
+                buy_order_id, trading_symbol, token, quantity, option_price + margin)
+
+            if sell_result['status'] == 201:
+                sell_order_id = sell_result['order_id']
+                sell_order_status = get_order_status(sell_order_id)
+                log_signal_msg(
+                    True, msg=f"Buy Order Status: {buy_order_status}  \nSell Order Status: {sell_order_status}")
+            else:
+                log_signal_msg(
+                    True, msg=f"Buy Order Status: {buy_order_status}  \nSell Order Status: {sell_result['msg']}")
+        else:
+            log_signal_msg(
+                True, msg=f"Buy Order Status: {buy_order_status}")
+
+    else:
+        log_signal_msg(True, msg=buy_result['msg'])
+
+
+def exit_order():
+    cancel_order(sell_order_id, "NORMAL")
+    sell_result = sell_order_market(
+        buy_order_id, trading_symbol, token, quantity)
+    log_signal_msg(
+        True, msg=f"Sell Order Status: {sell_result['msg']}")
 
 # endregion
+
 
 # region run method
 
 
 def run_code():
+    global last_business_day, instrument_list
 
-    global instrument_list
+    print(f"Last Business Day : {last_business_day}")
+    inp = input("Please confirm : Yes(Y) or No(N) : ")
+
+    if inp.lower() in ["y", "yes"]:
+        print("Thanks for the confirmation")
+    else:
+        last_business_day = input(
+            "Please enter the last business day(yyyy-mm-dd) : ")
+
+    print("Last business day : ", last_business_day)
+
     instrument_list = get_instrument_list()
 
     logger.info(
         f"Bank Nifty Strategy Started : {dt.now(timezone(time_zone)).strftime(time_format)}")
+
+    logger.info(f"Last business day: {last_business_day}")
 
     if len(instrument_list) > 0:
         logger.info("Instrument list downloaded")

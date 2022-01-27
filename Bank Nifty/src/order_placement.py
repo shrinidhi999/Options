@@ -3,6 +3,10 @@
 import requests
 from smartapi import SmartConnect
 
+user_name = "S1112304"
+pwd = "$upeR123"
+api_key = "sKBuEyAI"
+
 
 def get_instrument_list():
 
@@ -12,10 +16,10 @@ def get_instrument_list():
 
 def get_account_details():
 
-    obj = SmartConnect(api_key="sKBuEyAI")
+    obj = SmartConnect(api_key=api_key)
     # login api call
 
-    data = obj.generateSession("S1112304", "$upeR123")
+    data = obj.generateSession(user_name, pwd)
     refreshToken = data['data']['refreshToken']
 
     # fetch the feedtoken
@@ -27,35 +31,14 @@ def get_account_details():
     return obj
 
 
-def robo_order():
-    obj = get_account_details()
-
-    orderparams = {
-        "variety": "ROBO",
-        "tradingsymbol": "BANKNIFTY27JAN2236400PE",
-        "symboltoken": 67868,
-        "transactiontype": "BUY",
-        "exchange": "NFO",
-        "ordertype": "LIMIT",
-        "producttype": "BO",
-        "duration": "DAY",
-        "price": 10.2,
-        "squareoff": 10.0,
-        "stoploss": 10.0,
-        "quantity": 25
-    }
-
-    return obj.placeOrder(orderparams)
-
-
-def buy_order(tradingsymbol, token, price, quantity):
+def buy_order(trading_symbol, token, price, quantity):
     obj = get_account_details()
 
     try:
         orderparams = {
             "exchange": "NFO",
             "instrumenttype": "OPTIDX",
-            "tradingsymbol": tradingsymbol,  # "BANKNIFTY27JAN2236400PE",
+            "tradingsymbol": trading_symbol,  # "BANKNIFTY27JAN2236400PE",
             "quantity": quantity,
             "transactiontype": "BUY",
             "ordertype": "LIMIT",
@@ -65,36 +48,9 @@ def buy_order(tradingsymbol, token, price, quantity):
             "price": price,  # "60",
             "symboltoken": token
         }
-        return obj.placeOrder(orderparams)
+        return {"status": 201, "order_id": obj.placeOrder(orderparams), "msg": "Buy Order Placed"}
     except Exception as e:
-        print("Order placement failed: {}".format(e))
-
-
-# not tested
-
-def buy_order_stop_loss():
-    obj = get_account_details()
-
-    try:
-        orderparams = {
-            "exchange": "NFO",
-            "instrumenttype": "OPTIDX",
-            "tradingsymbol": "BANKNIFTY27JAN2236400PE",
-            "quantity": 25,
-            "transactiontype": "BUY",
-            "ordertype": "STOPLOSS_LIMIT",  # "ordertype": "LIMIT",
-            "variety": "STOPLOSS",
-            "producttype": "CARRYFORWARD",
-            "duration": "DAY",
-            "price": "60",
-            "triggerprice": "59",
-            "stoploss": "20",  # todo - test this param
-            "symboltoken": "67868"
-        }
-        orderId = obj.placeOrder(orderparams)
-        print("The order id is: {}".format(orderId))
-    except Exception as e:
-        print("Order placement failed: {}".format(e))
+        return {"status": 501, "msg": e}
 
 
 def get_order_status(order_id):
@@ -103,7 +59,7 @@ def get_order_status(order_id):
     orders = obj.orderBook()['data']
     for ord in orders:
         if ord['orderid'] == order_id:
-            return f"Order Status: {ord['status']}" + f"Order Text: {ord['text']}"
+            return f"Order Status: {ord['status']}, Text:  {ord['text']}"
     return 'Not Found'
 
 
@@ -130,32 +86,7 @@ def get_order_details_full(order_id):
             print(ord)
 
 
-# not tested
-
-
-def modify_order(order_id, current_price):
-    obj = get_account_details()
-
-    orderparams = {
-        "variety": "NORMAL",
-        "orderid": order_id,
-        "ordertype": "LIMIT",
-        "producttype": "CARRYFORWARD",
-        "transactiontype": "SELL",
-        "duration": "DAY",
-        "price": current_price,
-        "quantity": 25,
-        "tradingsymbol": "BANKNIFTY27JAN2236400PE",
-        "symboltoken": "67868",
-        "exchange": "NFO"
-    }
-
-    return obj.modifyOrder(orderparams)
-
-# not tested
-
-
-def sell_order(order_id, exit_price):
+def sell_order_limit(order_id, trading_symbol, token, quantity, price):
     obj = get_account_details()
 
     try:
@@ -166,24 +97,59 @@ def sell_order(order_id, exit_price):
             "producttype": "CARRYFORWARD",
             "transactiontype": "SELL",
             "duration": "DAY",
-            "miit PRICE": exit_price,  # todo - check
-            "quantity": 25,
-            "tradingsymbol": "BANKNIFTY27JAN2236400PE",
-            "symboltoken": "67868",
+            "price": price,
+            "quantity": quantity,
+            "tradingsymbol": trading_symbol,
+            "symboltoken": token,
             "exchange": "NFO"
         }
-        orderId = obj.placeOrder(orderparams)
-        print("The order id is: {}".format(orderId))
+        return {"status": 201, "order_id": obj.placeOrder(orderparams), "msg": "Sell Order Placed"}
     except Exception as e:
-        print("Order placement failed: {}".format(e))
+        return {"status": 501, "msg": e}
+
+
+def sell_order_market(order_id, trading_symbol, token, quantity):
+    obj = get_account_details()
+
+    try:
+        orderparams = {
+            "variety": "NORMAL",
+            "orderid": order_id,
+            "ordertype": "MARKET",
+            "producttype": "CARRYFORWARD",
+            "transactiontype": "SELL",
+            "duration": "DAY",
+            "quantity": quantity,
+            "tradingsymbol": trading_symbol,
+            "symboltoken": token,
+            "exchange": "NFO"
+        }
+        return {"status": 201, "order_id": obj.placeOrder(orderparams), "msg": "Sell Order Placed"}
+    except Exception as e:
+        return {"status": 501, "msg": e}
+
+
+def cancel_order(order_id, variety):
+    obj = get_account_details()
+    return obj.cancelOrder(order_id, variety)
 
 
 if __name__ == "__main__":
-    # buy_order("BANKNIFTY27JAN2236400PE", 67868, 21, 25)
-    # buy_order_stop_loss()
-    oid = robo_order()
-    get_order_details(oid)
-    get_order_details_full(oid)
+    # Place buy order when signal comes
+    buy_oid = buy_order("BANKNIFTY27JAN2238200CE", 67918, 0.40, 25)
+    sell_oid = None
+
+    # place sell order with margin 20 pts(last param)
+    if 'complete' in get_order_status(buy_oid):
+        sell_oid = sell_order_limit(
+            buy_oid, "BANKNIFTY27JAN2238200PE", 67918, 25, 15)
+
+    # if exit signal comes, cancel the order
+    cancel_order(sell_oid, "NORMAL")
+
+    # sell the order at market price
+    sell_order_market(buy_oid, "BANKNIFTY27JAN2238200PE", 67918, 25)
+
+    # get_order_details(sell_id)
+    # get_order_details_full(oid)
     # get_order_status("220124000688087")
-    # sell_order("220124000653844", 80)
-    # modify_order("220124000688087", 80)
