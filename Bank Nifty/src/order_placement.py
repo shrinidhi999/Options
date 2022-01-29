@@ -50,7 +50,7 @@ def buy_order(trading_symbol, token, price, quantity):
         }
         return {"status": 201, "order_id": obj.placeOrder(orderparams), "msg": "Buy Order Placed"}
     except Exception as e:
-        return {"status": 501, "msg": e}
+        return {"status": 501, "msg": f"Buy order failed. Exception : {e}"}
 
 
 def get_order_status(order_id):
@@ -105,7 +105,7 @@ def sell_order_limit(order_id, trading_symbol, token, quantity, price):
         }
         return {"status": 201, "order_id": obj.placeOrder(orderparams), "msg": "Sell Order Placed"}
     except Exception as e:
-        return {"status": 501, "msg": e}
+        return {"status": 501, "msg": f"Sell order failed. Exception : {e}"}
 
 
 def sell_order_market(order_id, trading_symbol, token, quantity):
@@ -126,7 +126,7 @@ def sell_order_market(order_id, trading_symbol, token, quantity):
         }
         return {"status": 201, "order_id": obj.placeOrder(orderparams), "msg": "Sell Order Placed"}
     except Exception as e:
-        return {"status": 501, "msg": e}
+        return {"status": 501, "msg": f"Sell order failed. Exception : {e}"}
 
 
 def cancel_order(order_id, variety):

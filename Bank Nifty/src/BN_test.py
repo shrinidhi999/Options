@@ -46,15 +46,16 @@ signal_result_price = []
 
 # region strategy vars
 
+rsi_period = 2
 rsi_upper_limit = 95
 rsi_lower_limit = 0.5
 margin = 20
 
-st1_length = 7
+st1_length = 10
 st1_factor = 1
-st2_length = 8
+st2_length = 10
 st2_factor = 2
-st3_length = 9
+st3_length = 10
 st3_factor = 3
 
 # endregion
@@ -176,13 +177,13 @@ def get_results():
         }
     )
 
-    print(
-        f"Interval: {interval} min \nMargin Points: {margin} \nAccuracy: {round((sum(signal_is_correct) / len(signal_is_correct) * 100), 2)}%"
-    )
-
     print("Sample Result:")
     results = df_test_result[df_test_result['Is Signal Correct'] == False]
     print(df_test_result.tail(30))
+
+    print(
+        f"Interval: {interval} min \nMargin Points: {margin} \nAccuracy: {round((sum(signal_is_correct) / len(signal_is_correct) * 100), 2)}%"
+    )
 
 
 def test_code():
@@ -195,7 +196,7 @@ def test_code():
     df["ST_8"] = supertrend(df, st2_length, st2_factor)["in_uptrend"]
     df["ST_9"] = supertrend(df, st3_length, st3_factor)["in_uptrend"]
 
-    df["RSI"] = rsi(df)
+    df["RSI"] = rsi(df, periods=rsi_period)
 
     for i in range(len(df)):
         arr = df.iloc[i][["ST_7", "ST_8", "ST_9"]].values
