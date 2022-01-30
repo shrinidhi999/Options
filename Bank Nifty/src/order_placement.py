@@ -3,9 +3,9 @@
 import requests
 from smartapi import SmartConnect
 
-user_name = "S1112304"
-pwd = "$upeR123"
-api_key = "sKBuEyAI"
+user_name = None
+pwd = None
+api_key = None
 
 
 def get_instrument_list():

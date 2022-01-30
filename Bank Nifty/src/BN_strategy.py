@@ -1,6 +1,7 @@
 # todo - exception handling fr yf api, add a chk to determine if df.tail() has current day data
 # todo - add when api call fails ex. instrument list download failed
 # exit order - check if buy_oid == none check can be added before calling this method
+# check for stop loss sell order
 
 # pip install yfinance
 # pip install plyer
@@ -61,7 +62,8 @@ put_option_price = 0
 trading_symbol = None
 quantity = 25
 buy_order_id = None
-sell_order_id = None
+target_sell_order_id = None
+stop_loss_sell_order_id = None
 margin = 20
 
 # endregion
@@ -319,7 +321,7 @@ def get_option_token(trading_symbol):
 
 
 def place_order(signal_type, strike_price, option_price):
-    global call_option_price, put_option_price, buy_order_id, sell_order_id, trading_symbol
+    global call_option_price, put_option_price, buy_order_id, target_sell_order_id, stop_loss_sell_order_id, trading_symbol
 
     if signal_type == "CE":
         call_option_price = strike_price
@@ -340,17 +342,17 @@ def place_order(signal_type, strike_price, option_price):
         buy_order_status = get_order_status(buy_order_id)
 
         if 'complete' in buy_order_status:
-            sell_result = sell_order_limit(
+            target_sell_result = sell_order_limit(
                 buy_order_id, trading_symbol, token, quantity, option_price + margin)
 
-            if sell_result['status'] == 201:
-                sell_order_id = sell_result['order_id']
-                sell_order_status = get_order_status(sell_order_id)
+            if target_sell_result['status'] == 201:
+                target_sell_order_id = target_sell_result['order_id']
+                sell_order_status = get_order_status(target_sell_order_id)
                 log_notification(
                     True, msg=f"Buy Order Status: {buy_order_status}  \nSell Order Status: {sell_order_status}")
             else:
                 log_notification(
-                    True, msg=f"Buy Order Status: {buy_order_status}  \nSell Order Status: {sell_result['msg']}")
+                    True, msg=f"Buy Order Status: {buy_order_status}  \nSell Order Status: {target_sell_result['msg']}")
         else:
             log_notification(
                 True, msg=f"Buy Order Status: {buy_order_status}")
@@ -360,19 +362,19 @@ def place_order(signal_type, strike_price, option_price):
 
 
 def exit_order():
-    global buy_order_id, sell_order_id
+    global buy_order_id, target_sell_order_id
 
     log_notification(
         True, msg="Exiting orders. Please check the orders manually")
 
-    cancel_order(sell_order_id, "NORMAL")
+    cancel_order(target_sell_order_id, "NORMAL")
     sell_result = sell_order_market(
         buy_order_id, trading_symbol, token, quantity)
     log_notification(
         True, msg=f"Sell Order Status: {sell_result['msg']}")
 
     buy_order_id = None
-    sell_order_id = None
+    target_sell_order_id = None
 
 
 # endregion
