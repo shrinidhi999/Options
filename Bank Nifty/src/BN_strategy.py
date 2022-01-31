@@ -1,7 +1,4 @@
 # todo - exception handling fr yf api, add a chk to determine if df.tail() has current day data
-# todo - add when api call fails ex. instrument list download failed
-# exit order - check if buy_oid == none check can be added before calling this method
-# check for stop loss sell order
 
 # pip install yfinance
 # pip install plyer
@@ -30,7 +27,7 @@ from pytz import timezone
 
 from get_option_data import get_option_price
 from indicators import rsi, supertrend
-from order_placement import buy_order, get_instrument_list, get_order_status, sell_order_limit, sell_order_market, cancel_order
+from order_placement import buy_order, get_instrument_list, get_order_status, sell_order_limit, sell_order_market, cancel_order, robo_order
 
 warnings.filterwarnings("ignore")
 
@@ -60,6 +57,7 @@ put_signal = False
 call_option_price = 0
 put_option_price = 0
 trading_symbol = None
+option_token = None
 quantity = 25
 buy_order_id = None
 target_sell_order_id = None
@@ -72,8 +70,8 @@ margin = 20
 
 title = "ALERT!"
 chat_id = "957717113"
-token = "5013995887:AAHUu6qsNzw1Bsbq46LThezZBxbGn-E12Tw"
-url = f"https://api.telegram.org/bot{token}"
+chatbot_token = "5013995887:AAHUu6qsNzw1Bsbq46LThezZBxbGn-E12Tw"
+url = f"https://api.telegram.org/bot{chatbot_token}"
 logger = None
 
 # endregion
@@ -86,7 +84,7 @@ symbol = "^NSEBANK"
 rsi_period = 2
 rsi_upper_limit = 95
 rsi_lower_limit = 0.5
-margin_strike_price_units = 400
+margin_strike_price_units = 300
 rsi_st_index = -1
 val_index = -1
 
@@ -139,6 +137,7 @@ def log_notification(logging_required, super_trend_arr=None, super_trend_arr_old
             f"Message : {msg}, Close: {close_val}, Open: {open_val}, RSI: {rsi_val}, super_trend_arr: {super_trend_arr}, super_trend_arr_old: {super_trend_arr_old}")
         logger.info(
             "---------------------------------------------------------------------------------------------")
+
 # endregion
 
 # region Data download
@@ -198,7 +197,7 @@ def signal_alert(super_trend_arr, super_trend_arr_old, timing, close_val, open_v
     timing = timing.strftime(time_format)
 
     logger.info(
-        f"Message : 5min Logging, Close: {close_val}, Open: {open_val}, RSI: {rsi_val}, super_trend_arr: {super_trend_arr}, super_trend_arr_old: {super_trend_arr_old}")
+        f"Message : Interval {interval} min, Close: {close_val}, Open: {open_val}, RSI: {rsi_val}, super_trend_arr: {super_trend_arr}, super_trend_arr_old: {super_trend_arr_old}")
 
     call_strategy(super_trend_arr, super_trend_arr_old,
                   timing, close_val, open_val, rsi_val)
@@ -245,24 +244,28 @@ def exit_put_signal(super_trend_arr, super_trend_arr_old, timing, close_val, ope
     global put_signal
 
     put_signal = False
-    exit_order()
 
     msg = f"PUT EXIT !!! {timing}"
 
     log_notification(True, super_trend_arr, super_trend_arr_old,
                      close_val, open_val, rsi_val, msg)
 
+    if buy_order_id:
+        exit_order()
+
 
 def exit_call_signal(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val):
     global call_signal
 
     call_signal = False
-    exit_order()
 
     msg = f"CALL EXIT !!! {timing}"
 
     log_notification(True, super_trend_arr, super_trend_arr_old,
                      close_val, open_val, rsi_val, msg)
+
+    if buy_order_id:
+        exit_order()
 
 
 def set_put_signal(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val):
@@ -275,8 +278,6 @@ def set_put_signal(super_trend_arr, super_trend_arr_old, timing, close_val, open
     strike_price -= margin_strike_price_units
     option_price = get_option_price(str(strike_price) + "PE")
 
-    place_order("PE", strike_price, option_price)
-
     if not any(super_trend_arr_old):
         msg = f"On going PUT Super Trend !!! {timing}, \nPUT Strike Price: {strike_price} PE, \nOption Price:  {option_price}"
     else:
@@ -284,6 +285,8 @@ def set_put_signal(super_trend_arr, super_trend_arr_old, timing, close_val, open
 
     log_notification(True, super_trend_arr, super_trend_arr_old,
                      close_val, open_val, rsi_val, msg)
+
+    place_order("PE", strike_price, option_price)
 
 
 def set_call_signal(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val):
@@ -296,8 +299,6 @@ def set_call_signal(super_trend_arr, super_trend_arr_old, timing, close_val, ope
     strike_price += margin_strike_price_units
     option_price = get_option_price(str(strike_price) + "CE")
 
-    place_order("CE", strike_price, option_price)
-
     if super_trend_arr_old.all():
         msg = f"On going Call Super Trend !!! {timing},  \nCALL Strike Price: {strike_price} CE, \nOption Price:  {option_price}"
     else:
@@ -305,6 +306,8 @@ def set_call_signal(super_trend_arr, super_trend_arr_old, timing, close_val, ope
 
     log_notification(True, super_trend_arr, super_trend_arr_old,
                      close_val, open_val, rsi_val, msg)
+
+    place_order("CE", strike_price, option_price)
 
 # endregion
 
@@ -321,7 +324,7 @@ def get_option_token(trading_symbol):
 
 
 def place_order(signal_type, strike_price, option_price):
-    global call_option_price, put_option_price, buy_order_id, target_sell_order_id, stop_loss_sell_order_id, trading_symbol
+    global call_option_price, put_option_price, buy_order_id, stop_loss_sell_order_id, trading_symbol, option_token
 
     if signal_type == "CE":
         call_option_price = strike_price
@@ -331,50 +334,33 @@ def place_order(signal_type, strike_price, option_price):
     option_tick = str(strike_price) + signal_type
     trading_symbol = weekly_expiry + option_tick
 
-    token = get_option_token(trading_symbol)
+    option_token = get_option_token(trading_symbol)
 
-    buy_result = buy_order(trading_symbol, token,
-                           option_price, quantity)
-
+    # call robo order here. rest of the lines not required
+    buy_result = robo_order(trading_symbol, option_token,
+                            option_price, quantity)
     if buy_result['status'] == 201:
-
         buy_order_id = buy_result['order_id']
         buy_order_status = get_order_status(buy_order_id)
-
-        if 'complete' in buy_order_status:
-            target_sell_result = sell_order_limit(
-                buy_order_id, trading_symbol, token, quantity, option_price + margin)
-
-            if target_sell_result['status'] == 201:
-                target_sell_order_id = target_sell_result['order_id']
-                sell_order_status = get_order_status(target_sell_order_id)
-                log_notification(
-                    True, msg=f"Buy Order Status: {buy_order_status}  \nSell Order Status: {sell_order_status}")
-            else:
-                log_notification(
-                    True, msg=f"Buy Order Status: {buy_order_status}  \nSell Order Status: {target_sell_result['msg']}")
-        else:
-            log_notification(
-                True, msg=f"Buy Order Status: {buy_order_status}")
-
+        log_notification(
+            True, msg=f"Buy Order Status: {buy_order_status}")
     else:
         log_notification(True, msg=buy_result['msg'])
 
 
 def exit_order():
-    global buy_order_id, target_sell_order_id
+    global buy_order_id
 
+    # sell robo order
+    # check order status before selling
     log_notification(
         True, msg="Exiting orders. Please check the orders manually")
-
-    cancel_order(target_sell_order_id, "NORMAL")
     sell_result = sell_order_market(
-        buy_order_id, trading_symbol, token, quantity)
+        buy_order_id, trading_symbol, option_token, quantity)
     log_notification(
         True, msg=f"Sell Order Status: {sell_result['msg']}")
 
     buy_order_id = None
-    target_sell_order_id = None
 
 
 # endregion
@@ -421,10 +407,8 @@ def initial_set_up():
 
     instrument_list = get_instrument_list()
 
-    logger.info(
-        f"Bank Nifty Strategy Started : {dt.now(timezone(time_zone)).strftime(time_format)}")
-
-    logger.info(f"Last business day: {last_business_day}")
+    log_notification(
+        True, msg=f"Bank Nifty Strategy Started : {dt.now(timezone(time_zone)).strftime(time_format)} \nLast business day: {last_business_day.strftime('%d-%m-%Y')}")
 
     if len(instrument_list) > 0:
         logger.info("Instrument list downloaded")
@@ -448,11 +432,11 @@ def run_code():
         res = timing.minute % interval
 
         if is_trading_time(timing) and res == 1:
+            indicator_calc_signal_generation()
             sleep_time_in_secs = (60 - timing.second) + (interval - 1) * 60
             print(
                 f"Sleep Time: {(interval - 1)} min {(60 - timing.second)} sec")
 
-            indicator_calc_signal_generation()
             time.sleep(sleep_time_in_secs)
         else:
             res = 5 if res == 0 else res
