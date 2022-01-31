@@ -3,13 +3,18 @@
 import requests
 from smartapi import SmartConnect
 
-user_name = "S1112304"
-pwd = "$upeR123"
-api_key = "cLgcIydO"
+user_name = None
+pwd = None
+api_key = None
+
+with open("Bank Nifty\src\credentials.txt", "r") as file:
+    creds = file.read().split('\n')
+    user_name = creds[0].split(' = ')[1]
+    pwd = creds[1].split(' = ')[1]
+    api_key = creds[2].split(' = ')[1]
 
 
 def get_instrument_list():
-
     return requests.get(
         r'https://margincalculator.angelbroking.com/OpenAPI_File/files/OpenAPIScripMaster.json').json()
 
@@ -184,4 +189,4 @@ if __name__ == "__main__":
     #     buy_oid, "BANKNIFTY03FEB2238200PE", 45276, 25)
     # get_order_details(sell_id)
     # get_order_details_full(res_sel)
-    # get_order_status("220124000688087")
+    # get_order_status(220124000688087)
