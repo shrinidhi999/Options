@@ -1,5 +1,6 @@
 # todo - exception handling fr yf api, add a chk to determine if df.tail() has current day data
 
+
 # pip install yfinance
 # pip install plyer
 # pip install smartapi-python
@@ -7,9 +8,10 @@
 
 # region imports
 
+import os
 import sys
 
-sys.path.append(r'Bank Nifty\src')  # nopep8
+sys.path.append(os.getcwd() + r'\src\modules')  # nopep8
 
 import logging
 import math
@@ -22,12 +24,13 @@ from datetime import timedelta
 
 import requests
 import yfinance as yf
-from plyer import notification
-from pytz import timezone
-
 from get_option_data import get_option_price
 from indicators import rsi, supertrend
-from order_placement import buy_order, get_instrument_list, get_order_status, sell_order_limit, sell_order_market, cancel_order, robo_order
+from order_placement import (buy_order, cancel_order, get_instrument_list,
+                             get_order_status, robo_order, sell_order_limit,
+                             sell_order_market)
+from plyer import notification
+from pytz import timezone
 
 warnings.filterwarnings("ignore")
 
@@ -152,13 +155,15 @@ def download_data():
         logger.info(
             "---------------------------------------------------------------------------------------------")
         logger.info(
-            f"DF downloaded : {df.head(3)}")
-        # Suppose the API called at 10.11am. The API returns 5m data till 10.10am and 1m data related to 10.11am.
-        # since our logic is for 5min data, we need to drop the 1m data.
-        if df.index[-1].minute % interval != 0:
-            df.drop(df.index[-1], inplace=True)
+            f"DF downloaded : {df.tail(5)}")
+        # In all the sites for 5min chart there is a delay. Ex. if we check for 10am candle, it gets completed at 10.04am
+        # since our logic is for 5min data, we need to drop the last candle data.
+        # if df.index[-1].minute % interval != 0:
+        #     df.drop(df.index[-1], inplace=True)
+
+        df.drop(df.index[-1], inplace=True)
         logger.info(
-            f"DF updated : {df.tail(3)}")
+            f"DF updated : {df.tail(5)}")
 
     except Exception as e:
         print(e.message)
@@ -408,7 +413,7 @@ def initial_set_up():
     instrument_list = get_instrument_list()
 
     log_notification(
-        True, msg=f"Bank Nifty Strategy Started : {dt.now(timezone(time_zone)).strftime(time_format)} \nLast business day: {last_business_day.strftime('%d-%m-%Y')}")
+        True, msg=f"Bank Nifty Strategy Started : {dt.now(timezone(time_zone)).strftime(time_format)} \nLast business day: {(present_day - shift).strftime('%d-%m-%Y')}")
 
     if len(instrument_list) > 0:
         logger.info("Instrument list downloaded")
@@ -431,7 +436,7 @@ def run_code():
 
         res = timing.minute % interval
 
-        if is_trading_time(timing) and res == 1:
+        if is_trading_time(timing) and res == 0:
             indicator_calc_signal_generation()
             sleep_time_in_secs = (60 - timing.second) + (interval - 1) * 60
             print(
@@ -439,8 +444,7 @@ def run_code():
 
             time.sleep(sleep_time_in_secs)
         else:
-            res = 5 if res == 0 else res
-            sleep_time = interval - res + 1
+            sleep_time = interval - res
             print(f"Sleep Time: {sleep_time} min")
             time.sleep(sleep_time * 60)
 

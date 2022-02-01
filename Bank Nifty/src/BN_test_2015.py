@@ -3,9 +3,10 @@
 # region imports
 
 import math
+import os
 import sys
 
-sys.path.append(r'Bank Nifty\src')  # nopep8
+sys.path.append(os.getcwd() + r'\src\modules')  # nopep8
 import time
 import warnings
 from datetime import datetime as dt
@@ -47,7 +48,7 @@ signal_result_price = []
 
 # region strategy vars
 
-test_start_year = 2015  # data available from 2015
+test_start_year = 2019  # data available from 2015
 
 rsi_period = 2
 rsi_upper_limit = 95

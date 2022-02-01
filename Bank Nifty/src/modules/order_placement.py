@@ -1,5 +1,6 @@
 # !pip install smartapi-python
 # !pip install websocket-client
+import os
 import requests
 from smartapi import SmartConnect
 
@@ -7,11 +8,16 @@ user_name = None
 pwd = None
 api_key = None
 
-with open("Bank Nifty\src\credentials.txt", "r") as file:
+with open(os.getcwd() + "\src\credentials.txt", "r") as file:
     creds = file.read().split('\n')
     user_name = creds[0].split(' = ')[1]
     pwd = creds[1].split(' = ')[1]
     api_key = creds[2].split(' = ')[1]
+
+
+# user_name = None
+# pwd = None
+# api_key = None
 
 
 def get_instrument_list():

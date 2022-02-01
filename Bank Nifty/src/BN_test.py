@@ -2,9 +2,10 @@
 
 # region imports
 import math
+import os
 import sys
 
-sys.path.append(r'Bank Nifty\src')  # nopep8
+sys.path.append(os.getcwd() + r'\src\modules')  # nopep8
 import time
 import warnings
 from datetime import datetime as dt
