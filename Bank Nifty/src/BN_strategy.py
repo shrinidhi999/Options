@@ -1,4 +1,7 @@
 # todo - exception handling fr yf api, add a chk to determine if df.tail() has current day data
+# try -catch blks in order placements
+# cancel order return stmt handle in strategy
+# chk order status(open/completed/closed) before selling on exit. got msg as selling order placed but order was complete. but logic working fine
 
 
 # pip install yfinance
@@ -415,11 +418,11 @@ def initial_set_up():
     log_notification(
         True, msg=f"Bank Nifty Strategy Started : {dt.now(timezone(time_zone)).strftime(time_format)} \nLast business day: {(present_day - shift).strftime('%d-%m-%Y')}")
 
-    if len(instrument_list) > 0:
+    if instrument_list:
         logger.info("Instrument list downloaded")
 
     else:
-        log_notification(True, msg="Instrument list not downloaded")
+        log_notification(True, msg="Instrument list download failed")
 
     logger.info(
         "---------------------------------------------------------------------------------------------")

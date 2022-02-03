@@ -1,19 +1,24 @@
 # pip install yfinance
 
 # region imports
+
 import math
 import os
 import sys
 
-sys.path.append(os.getcwd() + r'\src\modules')  # nopep8
+sys.path.append(os.getcwd() + r'\Bank Nifty\src\modules')   # nopep8
 import time
 import warnings
 from datetime import datetime as dt
 from datetime import time, timedelta
 
+import numpy as np
 import pandas as pd
+import requests
 import yfinance as yf
+from plyer import notification
 from pytz import timezone
+from tqdm import tqdm
 
 from indicators import rsi, supertrend
 
@@ -25,10 +30,6 @@ warnings.filterwarnings("ignore")
 
 interval = 5
 symbol = "^NSEBANK"
-
-input = (dt.now(timezone("Asia/Kolkata")).today() -
-         timedelta(days=59)).strftime("%Y-%m-%d")
-# input = "2022-01-14"
 
 call_signal = False
 put_signal = False
@@ -46,6 +47,8 @@ signal_result_price = []
 # endregion
 
 # region strategy vars
+
+test_start_year = 2019  # data available from 2015
 
 rsi_period = 2
 rsi_upper_limit = 95
@@ -92,16 +95,17 @@ def alert(arr, timing, close_val, open_val, high_val, low_val, rsi_val):
     is_closing_time = time(timing.hour, timing.minute) >= time(14, 30)
 
     if timing.hour < 10 or is_closing_time:
-
         set_out_of_trade_vals(timing)
         return
 
     timing = timing.strftime("%d-%m-%Y %H:%M")
+
     signal_strategy(arr, timing, close_val, open_val, rsi_val)
 
 
 def set_out_of_trade_vals(timing):
     global call_signal, put_signal, call_strike_price, put_strike_price, signal_end_time
+
     if call_signal:
         call_signal = False
         signal_end_time.append(timing.strftime("%d-%m-%Y %H:%M"))
@@ -156,13 +160,10 @@ def signal_strategy(arr, timing, close_val, open_val, rsi_val):
 
 
 def download_data():
-    df = None
-    try:
-        df = yf.download(symbol, start=input,
-                         period="1d", interval=str(interval) + "m")
-
-    except Exception as e:
-        print(e.message)
+    df = pd.read_csv(r'Bank Nifty\test data\NIFTY BANK Data.csv')
+    df = df.set_index('Datetime')
+    df.index = pd.to_datetime(df.index)
+    df = df[df.index.year >= test_start_year]
     return df
 
 
@@ -180,11 +181,15 @@ def get_results():
 
     print("Sample Result:")
     results = df_test_result[df_test_result['Is Signal Correct'] == False]
-    print(df_test_result.tail(30))
+    print(df_test_result.tail(10))
 
     print(
-        f"Interval: {interval} min \nMargin Points: {margin} \nAccuracy: {round((sum(signal_is_correct) / len(signal_is_correct) * 100), 2)}%"
+        f"Start year: {test_start_year} \nInterval: {interval} min \nMargin Points: {margin} \nAccuracy: {round((sum(signal_is_correct) / len(signal_is_correct) * 100), 2)}%"
     )
+
+    rev = (sum(signal_is_correct) * 500) - \
+        ((len(signal_is_correct) - sum(signal_is_correct)) * 500)
+    print(f"Revenue: {rev}")
 
 
 def test_code():
@@ -192,14 +197,12 @@ def test_code():
     # todo remove
 
     df = download_data()
-
     df["ST_7"] = supertrend(df, st1_length, st1_factor)["in_uptrend"]
     df["ST_8"] = supertrend(df, st2_length, st2_factor)["in_uptrend"]
     df["ST_9"] = supertrend(df, st3_length, st3_factor)["in_uptrend"]
-
     df["RSI"] = rsi(df, periods=rsi_period)
 
-    for i in range(len(df)):
+    for i in tqdm(range(len(df))):
         arr = df.iloc[i][["ST_7", "ST_8", "ST_9"]].values
         alert(
             arr,

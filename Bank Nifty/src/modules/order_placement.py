@@ -15,37 +15,38 @@ with open(os.getcwd() + "\src\credentials.txt", "r") as file:
     api_key = creds[2].split(' = ')[1]
 
 
-# user_name = None
-# pwd = None
-# api_key = None
-
-
 def get_instrument_list():
-    return requests.get(
-        r'https://margincalculator.angelbroking.com/OpenAPI_File/files/OpenAPIScripMaster.json').json()
+    try:
+        return requests.get(
+            r'https://margincalculator.angelbroking.com/OpenAPI_File/files/OpenAPIScripMaster.json').json()
+    except:
+        return None
 
 
 def get_account_details():
+    try:
+        obj = SmartConnect(api_key=api_key)
+        # login api call
 
-    obj = SmartConnect(api_key=api_key)
-    # login api call
+        data = obj.generateSession(user_name, pwd)
+        refreshToken = data['data']['refreshToken']
 
-    data = obj.generateSession(user_name, pwd)
-    refreshToken = data['data']['refreshToken']
+        # fetch the feedtoken
+        feedToken = obj.getfeedToken()
 
-    # fetch the feedtoken
-    feedToken = obj.getfeedToken()
+        # fetch User Profile
+        userProfile = obj.getProfile(refreshToken)
 
-    # fetch User Profile
-    userProfile = obj.getProfile(refreshToken)
+        return obj
 
-    return obj
+    except Exception as e:
+        print(f"Exception : {e}")
+        return None
 
 
 def buy_order(trading_symbol, token, price, quantity):
-    obj = get_account_details()
-
     try:
+        obj = get_account_details()
         orderparams = {
             "exchange": "NFO",
             "instrumenttype": "OPTIDX",
@@ -65,41 +66,49 @@ def buy_order(trading_symbol, token, price, quantity):
 
 
 def get_order_status(order_id):
-    obj = get_account_details()
+    try:
+        obj = get_account_details()
 
-    orders = obj.orderBook()['data']
-    for ord in orders:
-        if ord['orderid'] == order_id:
-            return f"Order Status: {ord['status']}, Text:  {ord['text']}"
-    return 'Not Found'
+        orders = obj.orderBook()['data']
+        for ord in orders:
+            if ord['orderid'] == order_id:
+                return f"Order Status: {ord['status']}, Text:  {ord['text']}"
+        return 'Not Found'
+    except Exception as e:
+        print(f"Exception : {e}")
 
 
-def get_order_details(order_id):
-    obj = get_account_details()
+def get_order_details():
+    try:
+        obj = get_account_details()
 
-    orders = obj.orderBook()['data']
-    for ord in orders:
-        if ord['orderid'] == order_id:
+        orders = obj.orderBook()['data']
+        for ord in orders:
             print(f"Order Id: {ord['orderid']}")
             print(f"Symbol: {ord['tradingsymbol']}")
             print(f"Price: {ord['price']}")
             print(f"Order Status: {ord['status']}")
             print(f"Order Text: {ord['text']}")
             print("-------------")
+    except Exception as e:
+        print(f"Exception : {e}")
 
 
 def get_order_details_full(order_id):
-    obj = get_account_details()
+    try:
+        obj = get_account_details()
 
-    orders = obj.orderBook()['data']
-    for ord in orders:
-        if ord['orderid'] == order_id:
-            print(ord)
+        orders = obj.orderBook()['data']
+        for ord in orders:
+            if ord['orderid'] == order_id:
+                print(ord)
+    except Exception as e:
+        print(f"Exception : {e}")
 
 
 def robo_order(trading_symbol, token, price, quantity):
-    obj = get_account_details()
     try:
+        obj = get_account_details()
         orderparams = {
             "variety": "ROBO",
             "tradingsymbol": trading_symbol,
@@ -110,13 +119,12 @@ def robo_order(trading_symbol, token, price, quantity):
             "producttype": "BO",
             "duration": "DAY",
             "price": price,
-            "squareoff": price+20,
-            "stoploss": price-30,
+            "squareoff": 20,
+            "stoploss": 40,
             "trailingStopLoss": 5,
             "quantity": quantity,
             "disclosedquantity": quantity
         }
-        print('try blk')
         return {"status": 201, "order_id": obj.placeOrder(orderparams), "msg": "Sell Order Placed"}
     except Exception as e:
         print('catch blk')
@@ -124,9 +132,8 @@ def robo_order(trading_symbol, token, price, quantity):
 
 
 def sell_order_limit(order_id, trading_symbol, token, quantity, price):
-    obj = get_account_details()
-
     try:
+        obj = get_account_details()
         orderparams = {
             "variety": "NORMAL",
             "orderid": order_id,
@@ -146,9 +153,8 @@ def sell_order_limit(order_id, trading_symbol, token, quantity, price):
 
 
 def sell_order_market(order_id, trading_symbol, token, quantity):
-    obj = get_account_details()
-
     try:
+        obj = get_account_details()
         orderparams = {
             "variety": "NORMAL",
             "orderid": order_id,
@@ -167,8 +173,11 @@ def sell_order_market(order_id, trading_symbol, token, quantity):
 
 
 def cancel_order(order_id, variety):
-    obj = get_account_details()
-    return obj.cancelOrder(order_id, variety)
+    try:
+        obj = get_account_details()
+        return obj.cancelOrder(order_id, variety)
+    except Exception as e:
+        return {"status": 501, "msg": f"Cancel order failed. Exception : {e}"}
 
 
 if __name__ == "__main__":
@@ -187,12 +196,12 @@ if __name__ == "__main__":
     # # sell the order at market price
     # sell_order_market(buy_oid, "BANKNIFTY27JAN2238200PE", 67918, 25)
 
-    res = robo_order("BANKNIFTY03FEB2238200PE", 45276, 50, 25)['order_id']
-    get_order_status(res)
-    res_sel = sell_order_market(res, "BANKNIFTY03FEB2238200PE", 45276, 25)
+    # res = robo_order("BANKNIFTY03FEB2238200PE", 45276, 50, 25)['order_id']
+    # get_order_status(res)
+    # res_sel = sell_order_market(res, "BANKNIFTY03FEB2238200PE", 45276, 25)
     # sell robo order
     # sell_result = sell_order_market(
     #     buy_oid, "BANKNIFTY03FEB2238200PE", 45276, 25)
-    # get_order_details(sell_id)
+    get_order_details()
     # get_order_details_full(res_sel)
     # get_order_status(220124000688087)

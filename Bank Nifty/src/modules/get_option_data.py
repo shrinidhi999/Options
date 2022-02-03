@@ -5,19 +5,19 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 def get_option_price(option):
-    url = "https://tradingtick.com/options/longshort.php"
+    try:
+        url = "https://tradingtick.com/options/longshort.php"
 
-    payload = '{"symb":"banknifty","interval":"5","stike":"' + \
-        option + '","type":"data"}'
+        payload = '{"symb":"banknifty","interval":"5","stike":"' + \
+            option + '","type":"data"}'
 
-    result = eval(requests.request("POST", url, data=payload,
-                                   verify=False).json()[0].replace("null", "0"))[0]
-
-    result = float(result['lp']) + float(result['lastprice']
-                                         ) if float(result['lp']) < 0 else float(result['lastprice'])
-    return result
+        result = eval(requests.request("POST", url, data=payload,
+                                       verify=False).json()[0].replace("null", "0"))[1]
+        return float(result['lastprice'])
+    except:
+        return 0
 
 
 if __name__ == "__main__":
-    option_strike = "38200CE"
+    option_strike = "39300CE"
     print(get_option_price(option_strike))
