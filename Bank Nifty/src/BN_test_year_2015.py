@@ -14,6 +14,7 @@ from datetime import time, timedelta
 
 import numpy as np
 import pandas as pd
+import pandas_ta as ta
 import requests
 import yfinance as yf
 from plyer import notification
@@ -28,7 +29,7 @@ warnings.filterwarnings("ignore")
 
 # region test vars
 
-interval = 5
+interval = 2
 symbol = "^NSEBANK"
 
 call_signal = False
@@ -50,10 +51,11 @@ signal_result_price = []
 
 test_start_year = 2019  # data available from 2015
 
-rsi_period = 2
+ema_length = 9
+rsi_period = 5
 rsi_upper_limit = 95
-rsi_lower_limit = 0.5
-margin = 20
+rsi_lower_limit = 0.05
+margin = 10
 
 st1_length = 10
 st1_factor = 1
@@ -82,7 +84,7 @@ def update_signal_result(val, is_correct):
     signal_is_correct.append(is_correct)
 
 
-def alert(arr, timing, close_val, open_val, high_val, low_val, rsi_val):
+def alert(arr, timing, close_val, open_val, high_val, low_val, rsi_val, ema_val):
     global call_signal, put_signal, call_strike_price, put_strike_price, signal_end_time
 
     if len(signal_strike_price) > len(signal_result_price):
@@ -100,7 +102,8 @@ def alert(arr, timing, close_val, open_val, high_val, low_val, rsi_val):
 
     timing = timing.strftime("%d-%m-%Y %H:%M")
 
-    signal_strategy(arr, timing, close_val, open_val, rsi_val)
+    signal_strategy(arr, timing, close_val, open_val,
+                    rsi_val, high_val, low_val, ema_val)
 
 
 def set_out_of_trade_vals(timing):
@@ -119,7 +122,7 @@ def set_out_of_trade_vals(timing):
             update_signal_result(0, False)
 
 
-def signal_strategy(arr, timing, close_val, open_val, rsi_val):
+def signal_strategy(arr, timing, close_val, open_val, rsi_val,  high_val, low_val, ema_val):
     global call_signal, put_signal, call_strike_price, put_strike_price, signal_end_time
 
     if (
@@ -127,24 +130,26 @@ def signal_strategy(arr, timing, close_val, open_val, rsi_val):
         and call_signal == False
         and close_val > open_val
         and rsi_val < rsi_upper_limit
+        and low_val > ema_val
     ):
         call_signal = True
-        call_strike_price = close_val
-        price = int(math.ceil(close_val / 100.0)) * 100
+        call_strike_price = high_val
+        price = int(math.ceil(high_val / 100.0)) * 100
         price += 100
-        update_signal_vals(timing, "CALL", close_val)
+        update_signal_vals(timing, "CALL", high_val)
 
     if (
         not any(arr)
         and put_signal == False
         and close_val < open_val
         and rsi_val > rsi_lower_limit
+        and high_val < ema_val
     ):
         put_signal = True
-        put_strike_price = close_val
-        price = int(math.floor(close_val / 100.0)) * 100
+        put_strike_price = low_val
+        price = int(math.floor(low_val / 100.0)) * 100
         price -= 100
-        update_signal_vals(timing, "PUT", close_val)
+        update_signal_vals(timing, "PUT", low_val)
 
     if call_signal and not arr.all():
         call_signal = False
@@ -187,7 +192,7 @@ def get_results():
         f"Start year: {test_start_year} \nInterval: {interval} min \nMargin Points: {margin} \nAccuracy: {round((sum(signal_is_correct) / len(signal_is_correct) * 100), 2)}%"
     )
 
-    rev = (sum(signal_is_correct) * 500) - \
+    rev = (sum(signal_is_correct) * 250) - \
         ((len(signal_is_correct) - sum(signal_is_correct)) * 500)
     print(f"Revenue: {rev}")
 
@@ -201,6 +206,7 @@ def test_code():
     df["ST_8"] = supertrend(df, st2_length, st2_factor)["in_uptrend"]
     df["ST_9"] = supertrend(df, st3_length, st3_factor)["in_uptrend"]
     df["RSI"] = rsi(df, periods=rsi_period)
+    df["EMA"] = ta.ema(df["Close"], length=ema_length)
 
     for i in tqdm(range(len(df))):
         arr = df.iloc[i][["ST_7", "ST_8", "ST_9"]].values
@@ -212,6 +218,7 @@ def test_code():
             df["High"][i],
             df["Low"][i],
             df["RSI"][i],
+            df["EMA"][i]
         )
     get_results()
 

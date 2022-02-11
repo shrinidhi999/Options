@@ -1,20 +1,28 @@
 # pip install yfinance
 
 # region imports
+
 import math
 import os
 import sys
+import itertools
+
 sys.path.append(os.getcwd() + r'\Bank Nifty\src\modules')   # nopep8
 import time
 import warnings
 from datetime import datetime as dt
 from datetime import time, timedelta
 
+import numpy as np
 import pandas as pd
 import pandas_ta as ta
+import requests
 import yfinance as yf
-from indicators import rsi, supertrend
+from plyer import notification
 from pytz import timezone
+from tqdm import tqdm
+
+from indicators import rsi, supertrend
 
 warnings.filterwarnings("ignore")
 
@@ -24,10 +32,6 @@ warnings.filterwarnings("ignore")
 
 interval = 5
 symbol = "^NSEBANK"
-
-input = (dt.now(timezone("Asia/Kolkata")).today() -
-         timedelta(days=59)).strftime("%Y-%m-%d")
-# input = "2022-02-09"
 
 call_signal = False
 put_signal = False
@@ -46,10 +50,12 @@ signal_result_price = []
 
 # region strategy vars
 
+test_start_year = 2019  # data available from 2015
+
 ema_length = 9
 rsi_period = 5
 rsi_upper_limit = 95
-rsi_lower_limit = 0.5
+rsi_lower_limit = 0.05
 margin = 10
 
 st1_length = 10
@@ -82,8 +88,6 @@ def update_signal_result(val, is_correct):
 def alert(arr, timing, close_val, open_val, high_val, low_val, rsi_val, ema_val):
     global call_signal, put_signal, call_strike_price, put_strike_price, signal_end_time
 
-    # print(timing, close_val, open_val, high_val, low_val, rsi_val, ema_val)
-
     if len(signal_strike_price) > len(signal_result_price):
         if call_signal and (high_val >= (call_strike_price + margin)):
             update_signal_result(high_val, True)
@@ -94,17 +98,18 @@ def alert(arr, timing, close_val, open_val, high_val, low_val, rsi_val, ema_val)
     is_closing_time = time(timing.hour, timing.minute) >= time(14, 30)
 
     if timing.hour < 10 or is_closing_time:
-
         set_out_of_trade_vals(timing)
         return
 
     timing = timing.strftime("%d-%m-%Y %H:%M")
+
     signal_strategy(arr, timing, close_val, open_val,
                     rsi_val, high_val, low_val, ema_val)
 
 
 def set_out_of_trade_vals(timing):
     global call_signal, put_signal, call_strike_price, put_strike_price, signal_end_time
+
     if call_signal:
         call_signal = False
         signal_end_time.append(timing.strftime("%d-%m-%Y %H:%M"))
@@ -118,7 +123,7 @@ def set_out_of_trade_vals(timing):
             update_signal_result(0, False)
 
 
-def signal_strategy(arr, timing, close_val, open_val, rsi_val, high_val, low_val, ema_val):
+def signal_strategy(arr, timing, close_val, open_val, rsi_val,  high_val, low_val, ema_val):
     global call_signal, put_signal, call_strike_price, put_strike_price, signal_end_time
 
     if (
@@ -161,13 +166,10 @@ def signal_strategy(arr, timing, close_val, open_val, rsi_val, high_val, low_val
 
 
 def download_data():
-    df = None
-    try:
-        df = yf.download(symbol, start=input, end="2022-02-10",
-                         period="1d", interval=str(interval) + "m")
-
-    except Exception as e:
-        print(e.message)
+    df = pd.read_csv(r'Bank Nifty\test data\NIFTY BANK Data.csv')
+    df = df.set_index('Datetime')
+    df.index = pd.to_datetime(df.index)
+    df = df[df.index.year >= test_start_year]
     return df
 
 
@@ -183,29 +185,36 @@ def get_results():
         }
     )
 
+    accuracy = round(
+        (sum(signal_is_correct) / len(signal_is_correct) * 100), 2)
     print("Sample Result:")
     results = df_test_result[df_test_result['Is Signal Correct'] == False]
-    print(df_test_result.tail(30))
+    print(df_test_result.tail(10))
 
     print(
-        f"Interval: {interval} min \nMargin Points: {margin} \nAccuracy: {round((sum(signal_is_correct) / len(signal_is_correct) * 100), 2)}%"
+        f"Start year: {test_start_year} \nInterval: {interval} min \nMargin Points: {margin} \nAccuracy: {accuracy}%"
     )
+
+    rev = (sum(signal_is_correct) * 250) - \
+        ((len(signal_is_correct) - sum(signal_is_correct)) * 500)
+    print(f"Revenue: {rev}")
+    return accuracy, len(signal_is_correct), rev
 
 
 def test_code():
 
+    print(st1_length)
+    print(st1_factor)
     # todo remove
 
     df = download_data()
-
     df["ST_7"] = supertrend(df, st1_length, st1_factor)["in_uptrend"]
     df["ST_8"] = supertrend(df, st2_length, st2_factor)["in_uptrend"]
     df["ST_9"] = supertrend(df, st3_length, st3_factor)["in_uptrend"]
-
     df["RSI"] = rsi(df, periods=rsi_period)
     df["EMA"] = ta.ema(df["Close"], length=ema_length)
 
-    for i in range(len(df)):
+    for i in tqdm(range(len(df))):
         arr = df.iloc[i][["ST_7", "ST_8", "ST_9"]].values
         alert(
             arr,
@@ -215,11 +224,72 @@ def test_code():
             df["High"][i],
             df["Low"][i],
             df["RSI"][i],
-            df['EMA'][i]
+            df["EMA"][i]
         )
-    get_results()
+    return get_results()
 
 
-test_code()
+# acc,pts, rev = test_code()
+
+
+# initialize lists
+st1_length_list = [7, 10, 100, 6]
+st1_factor_list = [1, 1.2, 1.4]
+st2_length_list = [8, 10, 100, 7]
+st2_factor_list = [2, 2.4, 2.8]
+st3_length_list = [9, 10, 100, 7]
+st3_factor_list = [3, 3.6, 4.2]
+rsi_period_list = [5]
+rsi_upper_limit_list = [95]
+rsi_lower_limit_list = [0.05]
+ema_length_list = [9, 14, 28, 200]
+
+accs = []
+pts_list = []
+revs = []
+
+final = [st1_length_list, st1_factor_list, st2_length_list, st2_factor_list, st3_length_list,
+         st3_factor_list, rsi_period_list, rsi_upper_limit_list, rsi_lower_limit_list, ema_length_list]
+res_combos = list(itertools.product(*final))
+
+for i, v in tqdm(enumerate(res_combos)):
+    st1_length = v[0]
+    st1_factor = v[1]
+    st2_length = v[2]
+    st2_factor = v[3]
+    st3_length = v[4]
+    st3_factor = v[5]
+    rsi_period = v[6]
+    rsi_upper_limit = v[7]
+    rsi_lower_limit = v[8]
+    ema_length = v[9]
+
+    call_signal = False
+    put_signal = False
+    call_strike_price = 0
+    put_strike_price = 0
+
+    signal_start_time = []
+    signal_end_time = []
+    signal_type = []
+    signal_strike_price = []
+    signal_is_correct = []
+    signal_result_price = []
+
+    acc, pts, rev = test_code()
+    accs.append(acc)
+    pts_list.append(pts)
+    revs.append(rev)
+
+
+print(f"Max Accuracy: {max(accs)}")
+print(f"Max Accuracy Index: {accs.index(max(accs))}")
+
+print(f"Max Points: {max(pts_list)}")
+print(f"Max Points Index: {pts_list.index(max(pts_list))}")
+
+print(f"Max Accuracy: {max(revs)}")
+print(f"Max Accuracy Index: {accs.index(max(revs))}")
+
 
 # endregion

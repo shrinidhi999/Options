@@ -14,10 +14,11 @@ def get_option_price(option):
         result = eval(requests.request("POST", url, data=payload,
                                        verify=False).json()[0].replace("null", "0"))[1]
         return float(result['lastprice'])
-    except:
+    except Exception as e:
+        print(e)
         return 0
 
 
 if __name__ == "__main__":
-    option_strike = "39300CE"
+    option_strike = "386000CE"
     print(get_option_price(option_strike))

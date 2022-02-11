@@ -73,3 +73,5 @@ def rsi(df, periods=2, ema=True):
     rsi = ma_up / ma_down
     rsi = 100 - (100 / (1 + rsi))
     return rsi
+
+
