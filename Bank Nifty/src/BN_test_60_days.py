@@ -27,7 +27,7 @@ symbol = "^NSEBANK"
 
 input = (dt.now(timezone("Asia/Kolkata")).today() -
          timedelta(days=59)).strftime("%Y-%m-%d")
-# input = "2022-02-09"
+# input = "2022-02-01"
 
 call_signal = False
 put_signal = False
@@ -45,19 +45,34 @@ signal_result_price = []
 # endregion
 
 # region strategy vars
+# (10, 1.2, 7, 2.4, 9, 3.6, 5, 95, 0.05, 14, 150) - 84% - 102
+# (10, 1.2, 7, 2.4, 9, 3.6, 5, 95, 0.05, 14, 275) - 90.77% - 64
 
-ema_length = 9
+#     st1_length = params[0]
+#     st1_factor = params[1]
+#     st2_length = params[2]
+#     st2_factor = params[3]
+#     st3_length = params[4]
+#     st3_factor = params[5]
+#     rsi_period = params[6]
+#     rsi_upper_limit = params[7]
+#     rsi_lower_limit = params[8]
+#     ema_length = params[9]
+#     bb_width_min = params[10]
+
+bb_width_min = 150
+ema_length = 14
 rsi_period = 5
 rsi_upper_limit = 95
-rsi_lower_limit = 0.5
+rsi_lower_limit = 0.05
 margin = 10
 
 st1_length = 10
-st1_factor = 1
-st2_length = 10
-st2_factor = 2
-st3_length = 10
-st3_factor = 3
+st1_factor = 1.2
+st2_length = 7
+st2_factor = 2.4
+st3_length = 9
+st3_factor = 3.6
 
 # endregion
 
@@ -79,7 +94,7 @@ def update_signal_result(val, is_correct):
     signal_is_correct.append(is_correct)
 
 
-def alert(arr, timing, close_val, open_val, high_val, low_val, rsi_val, ema_val):
+def alert(arr, timing, close_val, open_val, high_val, low_val, rsi_val, ema_val, bb_width):
     global call_signal, put_signal, call_strike_price, put_strike_price, signal_end_time
 
     # print(timing, close_val, open_val, high_val, low_val, rsi_val, ema_val)
@@ -100,7 +115,7 @@ def alert(arr, timing, close_val, open_val, high_val, low_val, rsi_val, ema_val)
 
     timing = timing.strftime("%d-%m-%Y %H:%M")
     signal_strategy(arr, timing, close_val, open_val,
-                    rsi_val, high_val, low_val, ema_val)
+                    rsi_val, high_val, low_val, ema_val, bb_width)
 
 
 def set_out_of_trade_vals(timing):
@@ -118,11 +133,12 @@ def set_out_of_trade_vals(timing):
             update_signal_result(0, False)
 
 
-def signal_strategy(arr, timing, close_val, open_val, rsi_val, high_val, low_val, ema_val):
+def signal_strategy(arr, timing, close_val, open_val, rsi_val, high_val, low_val, ema_val, bb_width):
     global call_signal, put_signal, call_strike_price, put_strike_price, signal_end_time
 
     if (
-        arr.all()
+        bb_width > bb_width_min
+        and arr.all()
         and call_signal == False
         and close_val > open_val
         and rsi_val < rsi_upper_limit
@@ -135,7 +151,8 @@ def signal_strategy(arr, timing, close_val, open_val, rsi_val, high_val, low_val
         update_signal_vals(timing, "CALL", high_val)
 
     if (
-        not any(arr)
+        bb_width > bb_width_min
+        and not any(arr)
         and put_signal == False
         and close_val < open_val
         and rsi_val > rsi_lower_limit
@@ -163,7 +180,7 @@ def signal_strategy(arr, timing, close_val, open_val, rsi_val, high_val, low_val
 def download_data():
     df = None
     try:
-        df = yf.download(symbol, start=input, end="2022-02-10",
+        df = yf.download(symbol, start=input,
                          period="1d", interval=str(interval) + "m")
 
     except Exception as e:
@@ -184,7 +201,7 @@ def get_results():
     )
 
     print("Sample Result:")
-    results = df_test_result[df_test_result['Is Signal Correct'] == False]
+    # df_test_result = df_test_result[df_test_result["Is Signal Correct"] == False]
     print(df_test_result.tail(30))
 
     print(
@@ -205,6 +222,11 @@ def test_code():
     df["RSI"] = rsi(df, periods=rsi_period)
     df["EMA"] = ta.ema(df["Close"], length=ema_length)
 
+    bollinger_band = ta.bbands(df["Close"], length=20, std=2)[
+        ["BBL_20_2.0", "BBU_20_2.0"]]
+    df["Bollinger_Width"] = bollinger_band["BBU_20_2.0"] - \
+        bollinger_band["BBL_20_2.0"]
+
     for i in range(len(df)):
         arr = df.iloc[i][["ST_7", "ST_8", "ST_9"]].values
         alert(
@@ -215,7 +237,8 @@ def test_code():
             df["High"][i],
             df["Low"][i],
             df["RSI"][i],
-            df['EMA'][i]
+            df["EMA"][i],
+            df["Bollinger_Width"][i],
         )
     get_results()
 

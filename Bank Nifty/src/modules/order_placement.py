@@ -14,6 +14,10 @@ with open(os.getcwd() + "\src\credentials.txt", "r") as file:
     pwd = creds[1].split(' = ')[1]
     api_key = creds[2].split(' = ')[1]
 
+squareoff = 10
+stoploss = 20
+trailingStopLoss = 5
+
 
 def get_instrument_list():
     try:
@@ -82,9 +86,9 @@ def robo_order(trading_symbol, token, price, quantity):
             "producttype": "BO",
             "duration": "DAY",
             "price": price,
-            "squareoff": 10,
-            "stoploss": 20,
-            "trailingStopLoss": 5,
+            "squareoff": squareoff,
+            "stoploss": stoploss,
+            "trailingStopLoss": trailingStopLoss,
             "quantity": quantity,
             "disclosedquantity": quantity
         }

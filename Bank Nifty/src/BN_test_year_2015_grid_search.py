@@ -6,6 +6,9 @@ import math
 import os
 import sys
 import itertools
+import multiprocessing
+from multiprocessing import Pool
+
 
 sys.path.append(os.getcwd() + r'\Bank Nifty\src\modules')   # nopep8
 import time
@@ -57,6 +60,7 @@ rsi_period = 5
 rsi_upper_limit = 95
 rsi_lower_limit = 0.05
 margin = 10
+bb_width_min = 250
 
 st1_length = 10
 st1_factor = 1
@@ -85,7 +89,7 @@ def update_signal_result(val, is_correct):
     signal_is_correct.append(is_correct)
 
 
-def alert(arr, timing, close_val, open_val, high_val, low_val, rsi_val, ema_val):
+def alert(arr, timing, close_val, open_val, high_val, low_val, rsi_val, ema_val, bb_width):
     global call_signal, put_signal, call_strike_price, put_strike_price, signal_end_time
 
     if len(signal_strike_price) > len(signal_result_price):
@@ -104,7 +108,7 @@ def alert(arr, timing, close_val, open_val, high_val, low_val, rsi_val, ema_val)
     timing = timing.strftime("%d-%m-%Y %H:%M")
 
     signal_strategy(arr, timing, close_val, open_val,
-                    rsi_val, high_val, low_val, ema_val)
+                    rsi_val, high_val, low_val, ema_val, bb_width)
 
 
 def set_out_of_trade_vals(timing):
@@ -123,11 +127,12 @@ def set_out_of_trade_vals(timing):
             update_signal_result(0, False)
 
 
-def signal_strategy(arr, timing, close_val, open_val, rsi_val,  high_val, low_val, ema_val):
+def signal_strategy(arr, timing, close_val, open_val, rsi_val,  high_val, low_val, ema_val, bb_width):
     global call_signal, put_signal, call_strike_price, put_strike_price, signal_end_time
 
     if (
-        arr.all()
+        bb_width > bb_width_min
+        and arr.all()
         and call_signal == False
         and close_val > open_val
         and rsi_val < rsi_upper_limit
@@ -140,7 +145,8 @@ def signal_strategy(arr, timing, close_val, open_val, rsi_val,  high_val, low_va
         update_signal_vals(timing, "CALL", high_val)
 
     if (
-        not any(arr)
+        bb_width > bb_width_min
+        and not any(arr)
         and put_signal == False
         and close_val < open_val
         and rsi_val > rsi_lower_limit
@@ -201,68 +207,20 @@ def get_results():
     return accuracy, len(signal_is_correct), rev
 
 
-def test_code():
+def test_code(params):
+    global st1_length, st1_factor, st2_length, st2_factor, st3_length, st3_factor, rsi_period, rsi_upper_limit, rsi_lower_limit, ema_length, bb_width_min, call_signal, put_signal, call_strike_price, put_strike_price, signal_start_time, signal_end_time, signal_type, signal_strike_price, signal_result_price, signal_is_correct, cnt
 
-    print(st1_length)
-    print(st1_factor)
-    # todo remove
-
-    df = download_data()
-    df["ST_7"] = supertrend(df, st1_length, st1_factor)["in_uptrend"]
-    df["ST_8"] = supertrend(df, st2_length, st2_factor)["in_uptrend"]
-    df["ST_9"] = supertrend(df, st3_length, st3_factor)["in_uptrend"]
-    df["RSI"] = rsi(df, periods=rsi_period)
-    df["EMA"] = ta.ema(df["Close"], length=ema_length)
-
-    for i in tqdm(range(len(df))):
-        arr = df.iloc[i][["ST_7", "ST_8", "ST_9"]].values
-        alert(
-            arr,
-            df.index[i],
-            df["Close"][i],
-            df["Open"][i],
-            df["High"][i],
-            df["Low"][i],
-            df["RSI"][i],
-            df["EMA"][i]
-        )
-    return get_results()
-
-
-# acc,pts, rev = test_code()
-
-
-# initialize lists
-st1_length_list = [7, 10, 100, 6]
-st1_factor_list = [1, 1.2, 1.4]
-st2_length_list = [8, 10, 100, 7]
-st2_factor_list = [2, 2.4, 2.8]
-st3_length_list = [9, 10, 100, 7]
-st3_factor_list = [3, 3.6, 4.2]
-rsi_period_list = [5]
-rsi_upper_limit_list = [95]
-rsi_lower_limit_list = [0.05]
-ema_length_list = [9, 14, 28, 200]
-
-accs = []
-pts_list = []
-revs = []
-
-final = [st1_length_list, st1_factor_list, st2_length_list, st2_factor_list, st3_length_list,
-         st3_factor_list, rsi_period_list, rsi_upper_limit_list, rsi_lower_limit_list, ema_length_list]
-res_combos = list(itertools.product(*final))
-
-for i, v in tqdm(enumerate(res_combos)):
-    st1_length = v[0]
-    st1_factor = v[1]
-    st2_length = v[2]
-    st2_factor = v[3]
-    st3_length = v[4]
-    st3_factor = v[5]
-    rsi_period = v[6]
-    rsi_upper_limit = v[7]
-    rsi_lower_limit = v[8]
-    ema_length = v[9]
+    st1_length = params[0]
+    st1_factor = params[1]
+    st2_length = params[2]
+    st2_factor = params[3]
+    st3_length = params[4]
+    st3_factor = params[5]
+    rsi_period = params[6]
+    rsi_upper_limit = params[7]
+    rsi_lower_limit = params[8]
+    ema_length = params[9]
+    bb_width_min = params[10]
 
     call_signal = False
     put_signal = False
@@ -275,21 +233,83 @@ for i, v in tqdm(enumerate(res_combos)):
     signal_strike_price = []
     signal_is_correct = []
     signal_result_price = []
+    # todo remove
 
-    acc, pts, rev = test_code()
-    accs.append(acc)
-    pts_list.append(pts)
-    revs.append(rev)
+    df = download_data()
+    df["ST_7"] = supertrend(df, st1_length, st1_factor)["in_uptrend"]
+    df["ST_8"] = supertrend(df, st2_length, st2_factor)["in_uptrend"]
+    df["ST_9"] = supertrend(df, st3_length, st3_factor)["in_uptrend"]
+    df["RSI"] = rsi(df, periods=rsi_period)
+    df["EMA"] = ta.ema(df["Close"], length=ema_length)
+    bollinger_band = ta.bbands(df["Close"], length=20, std=2)[
+        ["BBL_20_2.0", "BBU_20_2.0"]]
+    df["Bollinger_Width"] = bollinger_band["BBU_20_2.0"] - \
+        bollinger_band["BBL_20_2.0"]
+
+    for i in tqdm(range(len(df))):
+        arr = df.iloc[i][["ST_7", "ST_8", "ST_9"]].values
+        alert(
+            arr,
+            df.index[i],
+            df["Close"][i],
+            df["Open"][i],
+            df["High"][i],
+            df["Low"][i],
+            df["RSI"][i],
+            df["EMA"][i],
+            df["Bollinger_Width"][i]
+        )
+
+    return get_results()
 
 
-print(f"Max Accuracy: {max(accs)}")
-print(f"Max Accuracy Index: {accs.index(max(accs))}")
-
-print(f"Max Points: {max(pts_list)}")
-print(f"Max Points Index: {pts_list.index(max(pts_list))}")
-
-print(f"Max Accuracy: {max(revs)}")
-print(f"Max Accuracy Index: {accs.index(max(revs))}")
-
+# max accuracy_score params= (10, 1.2, 7, 2.4, 9, 3.6, 5, 95, 0.05, 14, 200)
+params = (10, 1.2, 7, 2.4, 9, 3.6, 5, 95, 0.05, 14, 200)
+acc, pts, rev = test_code(params)
 
 # endregion
+
+# # region grid search
+
+# accs = None
+# pts_list = None
+# revs = None
+# result = None
+# cnt = 0
+
+# if __name__ == '__main__':
+
+#     # initialize lists
+#     st1_length_list = [10]
+#     st1_factor_list = [1.2]
+#     st2_length_list = [7]
+#     st2_factor_list = [2.4]
+#     st3_length_list = [9]
+#     st3_factor_list = [3.6]
+#     rsi_period_list = [5]
+#     rsi_upper_limit_list = [95]
+#     rsi_lower_limit_list = [0.05]
+#     ema_length_list = [14]
+#     bb_width = [150, 250, 275, 200]
+
+#     final = [st1_length_list, st1_factor_list, st2_length_list, st2_factor_list, st3_length_list,
+#              st3_factor_list, rsi_period_list, rsi_upper_limit_list, rsi_lower_limit_list, ema_length_list, bb_width]
+#     res_combos = list(itertools.product(*final))
+
+#     with Pool(multiprocessing.cpu_count()) as p:
+#         result = p.map(test_code, res_combos)
+
+#     accs = [i[0] for i in result]
+#     pts_list = [i[1] for i in result]
+#     revs = [i[2] for i in result]
+
+#     print(f"Max Accuracy: {max(accs)}")
+#     print(f"Max Accuracy Index: {accs.index(max(accs))}")
+
+#     print(f"Max Points: {max(pts_list)}")
+#     print(f"Max Points Index: {pts_list.index(max(pts_list))}")
+
+#     print(f"Max Revenue: {max(revs)}")
+#     print(f"Max Revenue Index: {revs.index(max(revs))}")
+
+# # endregion
