@@ -329,8 +329,8 @@ if __name__ == '__main__':
     # (7, 1.2, 10, 2.4, 9, 3, 5, 95, 0.05, 8, 150, 10, 1, 8, 5)
     # initialize lists
     st1_length_list = [7]
-    st1_factor_list = [1]
-    st2_length_list = [8]
+    st1_factor_list = [1.2]
+    st2_length_list = [10]
     st2_factor_list = [2.4]
     st3_length_list = [9]
     st3_factor_list = [3]
@@ -340,7 +340,7 @@ if __name__ == '__main__':
     ema_length_list = [8]
     bb_width = [150]
     margin = [10, 20]
-    stoploss_factor = [1]
+    stoploss_factor = [2]
     atr_period = [2]
     interval = [5]
 

@@ -88,7 +88,7 @@ logger = None
 symbol = "^NSEBANK"
 # symbol = "^DJUSBK"
 
-params = (7, 1, 8, 2.4, 9, 3, 5, 95, 0.05, 8, 150, 10, 1, 2, 5)
+params = (7, 1.2, 10, 2.4, 9, 3, 5, 95, 0.05, 8, 150, 10, 2, 2, 5)
 
 st1_length = params[0]
 st1_factor = params[1]
