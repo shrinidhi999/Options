@@ -1,6 +1,6 @@
 # todo - exception handling fr yf api, add a chk to determine if df.tail() has current day data
 # chk order status(open/completed/closed) before selling on exit. got msg as selling order placed but order was complete. but logic working fine
-# stoploss implementation
+# add bb, stoploss, in loggin
 
 # pip install yfinance
 # pip install plyer
@@ -30,7 +30,7 @@ import pandas as pd
 import requests
 import yfinance as yf
 from get_option_data import get_option_price
-from indicators import rsi, supertrend
+from indicators import rsi, supertrend, atr
 from order_placement import (cancel_order, get_instrument_list,
                              get_order_status, robo_order,
                              sell_order_market)
@@ -47,7 +47,7 @@ warnings.filterwarnings("ignore")
 
 time_zone = "Asia/Kolkata"
 time_format = "%d-%m-%Y %H:%M"
-interval = 5
+# interval = 5
 present_day = (dt.now(timezone(time_zone)).today())
 
 shift = timedelta(max(1, (present_day.weekday() + 6) % 7 - 3))
@@ -70,7 +70,6 @@ quantity = 25
 buy_order_id = None
 target_sell_order_id = None
 stop_loss_sell_order_id = None
-margin = 10
 
 # endregion
 
@@ -89,33 +88,27 @@ logger = None
 symbol = "^NSEBANK"
 # symbol = "^DJUSBK"
 
-# (10, 1.2, 7, 2.4, 9, 3.6, 5, 95, 0.05, 14, 275) - 90.77% - 64
+params = (7, 1, 8, 2.4, 9, 3, 5, 95, 0.05, 8, 150, 10, 1, 2, 5)
 
-#     st1_length = params[0]
-#     st1_factor = params[1]
-#     st2_length = params[2]
-#     st2_factor = params[3]
-#     st3_length = params[4]
-#     st3_factor = params[5]
-#     rsi_period = params[6]
-#     rsi_upper_limit = params[7]
-#     rsi_lower_limit = params[8]
-#     ema_length = params[9]
-#     bb_width_min = params[10]
+st1_length = params[0]
+st1_factor = params[1]
+st2_length = params[2]
+st2_factor = params[3]
+st3_length = params[4]
+st3_factor = params[5]
+rsi_period = params[6]
+rsi_upper_limit = params[7]
+rsi_lower_limit = params[8]
+ema_length = params[9]
+bb_width_min = params[10]
+margin = params[11]
+stoploss_factor = params[12]
+atr_period = params[13]
+interval = params[14]
 
-bb_width_min = 275
-ema_length = 14
-rsi_period = 5
-rsi_upper_limit = 95
-rsi_lower_limit = 0.05
-margin_strike_price_units = 500
+
+margin_strike_price_units = 400
 val_index = -1
-st1_length = 10
-st1_factor = 1.2
-st2_length = 7
-st2_factor = 2.4
-st3_length = 9
-st3_factor = 3.6
 
 # endregion
 
@@ -196,7 +189,7 @@ def download_data():
 def is_trading_time(timing):
     global call_signal, put_signal
 
-    is_closing_time = dtm(timing.hour, timing.minute) >= dtm(14, 30)
+    is_closing_time = dtm(timing.hour, timing.minute) >= dtm(13, 00)
 
     if timing.hour < 10 or is_closing_time:
         if call_signal:
@@ -214,7 +207,7 @@ def is_trading_time(timing):
     return True
 
 
-def signal_alert(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val, high_val, low_val, ema_val, bb_width):
+def signal_alert(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val, high_val, low_val, ema_val, bb_width, atr_val):
     print(f"Time: {timing}")
     timing = timing.strftime(time_format)
 
@@ -222,13 +215,13 @@ def signal_alert(super_trend_arr, super_trend_arr_old, timing, close_val, open_v
         f"Message : Interval {interval} min, Close: {close_val}, Open: {open_val}, RSI: {rsi_val}, EMA: {ema_val}, super_trend_arr: {super_trend_arr}, super_trend_arr_old: {super_trend_arr_old}")
 
     call_strategy(super_trend_arr, super_trend_arr_old,
-                  timing, close_val, open_val, rsi_val, high_val, low_val, ema_val, bb_width)
+                  timing, close_val, open_val, rsi_val, high_val, low_val, ema_val, bb_width, atr_val)
 
     put_strategy(super_trend_arr, super_trend_arr_old,
-                 timing, close_val, open_val, rsi_val, high_val, low_val, ema_val, bb_width)
+                 timing, close_val, open_val, rsi_val, high_val, low_val, ema_val, bb_width, atr_val)
 
 
-def put_strategy(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val, high_val, low_val, ema_val, bb_width):
+def put_strategy(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val, high_val, low_val, ema_val, bb_width, atr_val):
     global put_signal
 
     if (
@@ -240,14 +233,14 @@ def put_strategy(super_trend_arr, super_trend_arr_old, timing, close_val, open_v
         and high_val < ema_val
     ):
         set_put_signal(super_trend_arr, super_trend_arr_old,
-                       timing, close_val, open_val, rsi_val, ema_val)
+                       timing, close_val, open_val, rsi_val, ema_val, atr_val)
 
-    if put_signal and super_trend_arr.any():
+    if put_signal and (super_trend_arr.any() or (open_val > ema_val)):
         exit_put_signal(super_trend_arr, super_trend_arr_old,
                         timing, close_val, open_val, rsi_val)
 
 
-def call_strategy(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val, high_val, low_val, ema_val, bb_width):
+def call_strategy(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val, high_val, low_val, ema_val, bb_width, atr_val):
     global call_signal
 
     if (
@@ -259,9 +252,9 @@ def call_strategy(super_trend_arr, super_trend_arr_old, timing, close_val, open_
         and low_val > ema_val
     ):
         set_call_signal(super_trend_arr, super_trend_arr_old,
-                        timing, close_val, open_val, rsi_val, ema_val)
+                        timing, close_val, open_val, rsi_val, ema_val, atr_val)
 
-    if call_signal and not super_trend_arr.all():
+    if call_signal and (not super_trend_arr.all() or (open_val < ema_val)):
         exit_call_signal(super_trend_arr, super_trend_arr_old,
                          timing, close_val, open_val, rsi_val)
 
@@ -294,7 +287,7 @@ def exit_call_signal(super_trend_arr, super_trend_arr_old, timing, close_val, op
         exit_order()
 
 
-def set_put_signal(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val, ema_val):
+def set_put_signal(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val, ema_val, atr_val):
     global put_signal
 
     put_signal = True
@@ -307,18 +300,20 @@ def set_put_signal(super_trend_arr, super_trend_arr_old, timing, close_val, open
     # option_price = get_option_price(str(strike_price) + "PE")
     option_price = 0
 
+    stoploss = stoploss_factor * atr_val
+
     if not any(super_trend_arr_old):
-        msg = f"On going PUT Super Trend !!! {timing}, \nPUT Strike Price: {strike_price} PE, \nOption Price:  {option_price}"
+        msg = f"On going PUT Super Trend !!! {timing}, \nPUT Strike Price: {strike_price} PE, \nStop Loss:  {stoploss}"
     else:
-        msg = f"PUT SIGNAL !!! {timing}, \nPUT Strike Price: {strike_price} PE, \nOption Price:  {option_price}"
+        msg = f"PUT SIGNAL !!! {timing}, \nPUT Strike Price: {strike_price} PE, \nStop Loss:  {stoploss}"
 
     log_notification(True, super_trend_arr, super_trend_arr_old,
                      close_val, open_val, rsi_val, msg, ema_val)
 
-    place_order("PE", strike_price, option_price)
+    place_order("PE", strike_price, option_price, stoploss)
 
 
-def set_call_signal(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val, ema_val):
+def set_call_signal(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val, ema_val, atr_val):
     global call_signal
 
     call_signal = True
@@ -330,16 +325,17 @@ def set_call_signal(super_trend_arr, super_trend_arr_old, timing, close_val, ope
     # purchasing at market price
     # option_price = get_option_price(str(strike_price) + "PE")
     option_price = 0
+    stoploss = stoploss_factor * atr_val
 
     if super_trend_arr_old.all():
-        msg = f"On going Call Super Trend !!! {timing},  \nCALL Strike Price: {strike_price} CE, \nOption Price:  {option_price}"
+        msg = f"On going Call Super Trend !!! {timing},  \nCALL Strike Price: {strike_price} CE, \nStop Loss:  {stoploss}"
     else:
-        msg = f"CALL SIGNAL !!! {timing},  \nCALL Strike Price: {strike_price} CE, \nOption Price:  {option_price}"
+        msg = f"CALL SIGNAL !!! {timing},  \nCALL Strike Price: {strike_price} CE, \nStop Loss:  {stoploss}"
 
     log_notification(True, super_trend_arr, super_trend_arr_old,
                      close_val, open_val, rsi_val, msg, ema_val)
 
-    place_order("CE", strike_price, option_price)
+    place_order("CE", strike_price, option_price, stoploss)
 
 # endregion
 
@@ -355,7 +351,7 @@ def get_option_token(trading_symbol):
     return token
 
 
-def place_order(signal_type, strike_price, option_price):
+def place_order(signal_type, strike_price, option_price, stoploss=20):
     global call_option_price, put_option_price, buy_order_id, stop_loss_sell_order_id, trading_symbol, option_token
 
     if signal_type == "CE":
@@ -368,9 +364,8 @@ def place_order(signal_type, strike_price, option_price):
 
     option_token = get_option_token(trading_symbol)
 
-    # call robo order here. rest of the lines not required
     buy_result = robo_order(trading_symbol, option_token,
-                            option_price, quantity)
+                            option_price, quantity, margin, stoploss)
     if buy_result['status'] == 201:
         buy_order_id = buy_result['order_id']
         buy_order_status = get_order_status(buy_order_id)
@@ -411,6 +406,7 @@ def indicator_calc_signal_generation():
     df["ST_7"] = supertrend(df, st1_length, st1_factor)["in_uptrend"]
     df["ST_8"] = supertrend(df, st2_length, st2_factor)["in_uptrend"]
     df["ST_9"] = supertrend(df, st3_length, st3_factor)["in_uptrend"]
+    df["ATR"] = atr(df, atr_period)
     df["RSI"] = rsi(df, periods=rsi_period)
     df["EMA"] = ta.ema(df["Close"], length=ema_length)
 
@@ -434,7 +430,8 @@ def indicator_calc_signal_generation():
         df["High"][val_index],
         df["Low"][val_index],
         df["EMA"][val_index],
-        df['Bollinger_Width'][val_index]
+        df["Bollinger_Width"][val_index],
+        df["ATR"][val_index]
     )
 
 
@@ -479,7 +476,7 @@ def run_code():
 
         res = timing.minute % interval
 
-        if res == 0:
+        if is_trading_time(timing) and res == 0:
             indicator_calc_signal_generation()
             sleep_time_in_secs = (60 - timing.second) + (interval - 1) * 60
             print(

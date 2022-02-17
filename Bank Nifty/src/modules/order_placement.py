@@ -14,8 +14,6 @@ with open(os.getcwd() + "\src\credentials.txt", "r") as file:
     pwd = creds[1].split(' = ')[1]
     api_key = creds[2].split(' = ')[1]
 
-squareoff = 10
-stoploss = 20
 trailingStopLoss = 5
 
 
@@ -73,7 +71,7 @@ def get_order_details_full(order_id):
         print(f"Exception : {e}")
 
 
-def robo_order(trading_symbol, token, price, quantity):
+def robo_order(trading_symbol, token, price, quantity, square_off=20, stoploss=50):
     try:
         obj = get_account_details()
         orderparams = {
@@ -86,7 +84,7 @@ def robo_order(trading_symbol, token, price, quantity):
             "producttype": "BO",
             "duration": "DAY",
             "price": price,
-            "squareoff": squareoff,
+            "squareoff": square_off,
             "stoploss": stoploss,
             "trailingStopLoss": trailingStopLoss,
             "quantity": quantity,
