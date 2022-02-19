@@ -1,28 +1,39 @@
 # !pip install smartapi-python
 # !pip install websocket-client
 import os
+
 import requests
+from joblib import Memory
 from smartapi import SmartConnect
+
+cache_dir = os.getcwd()
+mem = Memory(cache_dir)
+trailing_stop_loss = 5
 
 user_name = None
 pwd = None
 api_key = None
+file_path = os.getcwd() + r"\src\credentials.txt"
 
-with open(os.getcwd() + "\src\credentials.txt", "r") as file:
-    creds = file.read().split('\n')
-    user_name = creds[0].split(' = ')[1]
-    pwd = creds[1].split(' = ')[1]
-    api_key = creds[2].split(' = ')[1]
+if os.path.exists(file_path):
+    with open(file_path, "r") as file:
+        creds = file.read().split('\n')
+        user_name = creds[0].split(' = ')[1]
+        pwd = creds[1].split(' = ')[1]
+        api_key = creds[2].split(' = ')[1]
 
-trailingStopLoss = 5
 
-
+@mem.cache(verbose=0)
 def get_instrument_list():
     try:
         return requests.get(
             r'https://margincalculator.angelbroking.com/OpenAPI_File/files/OpenAPIScripMaster.json').json()
     except:
         return None
+
+
+def clear_cache():
+    get_instrument_list.clear()
 
 
 def get_account_details():
@@ -86,11 +97,13 @@ def robo_order(trading_symbol, token, price, quantity, square_off=20, stoploss=5
             "price": price,
             "squareoff": square_off,
             "stoploss": stoploss,
-            "trailingStopLoss": trailingStopLoss,
+            "trailingStopLoss": trailing_stop_loss,
             "quantity": quantity,
             "disclosedquantity": quantity
         }
-        return {"status": 201, "order_id": obj.placeOrder(orderparams), "msg": "Robo Order Placed"}
+        order_id = obj.placeOrder(orderparams)
+        return {"status": 201, "order_id": order_id, "msg": "Robo Order Placed"}
+
     except Exception as e:
         return {"status": 501, "msg": f"Robo order failed. Exception : {e}"}
 
@@ -110,7 +123,9 @@ def sell_order_market(order_id, trading_symbol, token, quantity, variety):
             "symboltoken": token,
             "exchange": "NFO"
         }
-        return {"status": 201, "order_id": obj.placeOrder(orderparams), "msg": "Sell Order Placed"}
+        order_id = obj.placeOrder(orderparams)
+        return {"status": 201, "order_id": order_id, "msg": "Sell Order Placed"}
+
     except Exception as e:
         return {"status": 501, "msg": f"Sell order failed. Exception : {e}"}
 

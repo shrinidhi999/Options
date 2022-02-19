@@ -1,6 +1,5 @@
 # todo - exception handling fr yf api, add a chk to determine if df.tail() has current day data
 # chk order status(open/completed/closed) before selling on exit. got msg as selling order placed but order was complete. but logic working fine
-# add bb, stoploss, in loggin
 
 # pip install yfinance
 # pip install plyer
@@ -29,11 +28,10 @@ import pandas as pd
 
 import requests
 import yfinance as yf
-from get_option_data import get_option_price
 from indicators import rsi, supertrend, atr
 from order_placement import (cancel_order, get_instrument_list,
                              get_order_status, robo_order,
-                             sell_order_market)
+                             sell_order_market, clear_cache)
 from plyer import notification
 from pytz import timezone
 
@@ -68,8 +66,6 @@ trading_symbol = None
 option_token = None
 quantity = 25
 buy_order_id = None
-target_sell_order_id = None
-stop_loss_sell_order_id = None
 
 # endregion
 
@@ -88,7 +84,7 @@ logger = None
 symbol = "^NSEBANK"
 # symbol = "^DJUSBK"
 
-params = (7, 1.2, 10, 2.4, 9, 3, 5, 95, 0.05, 8, 150, 10, 2, 2, 5)
+params = (7, 1.2, 10, 2, 9, 3, 5, 95, 0.05, 14, 125, 10, 2, 2, 5)
 
 st1_length = params[0]
 st1_factor = params[1]
@@ -143,13 +139,13 @@ def send_mobile_notification(msg):
     requests.get(f"{url}/sendMessage", params=params, verify=False)
 
 
-def log_notification(logging_required, super_trend_arr=None, super_trend_arr_old=None, close_val=None, open_val=None, rsi_val=None, msg=None, ema_val=None):
+def log_notification(logging_required, super_trend_arr=None, super_trend_arr_old=None, close_val=None, open_val=None, rsi_val=None, msg=None, ema_val=None, bb_width=None):
     msg = f"Interval : {interval} min \n {msg}"
     set_notification(msg)
     print(msg)
     if logging_required:
         logger.info(
-            f"Message : {msg}, Close: {close_val}, Open: {open_val}, RSI: {rsi_val}, EMA:{ema_val}, super_trend_arr: {super_trend_arr}, super_trend_arr_old: {super_trend_arr_old}")
+            f"Message : {msg}, Close: {close_val}, Open: {open_val}, RSI: {rsi_val}, EMA:{ema_val}, BB Width: {bb_width}, super_trend_arr: {super_trend_arr}, super_trend_arr_old: {super_trend_arr_old}")
         logger.info(
             "---------------------------------------------------------------------------------------------")
 
@@ -192,6 +188,7 @@ def is_trading_time(timing):
     is_closing_time = dtm(timing.hour, timing.minute) >= dtm(13, 00)
 
     if timing.hour < 10 or is_closing_time:
+        clear_cache()
         if call_signal:
             call_signal = False
             log_notification(
@@ -212,7 +209,7 @@ def signal_alert(super_trend_arr, super_trend_arr_old, timing, close_val, open_v
     timing = timing.strftime(time_format)
 
     logger.info(
-        f"Message : Interval {interval} min, Close: {close_val}, Open: {open_val}, RSI: {rsi_val}, EMA: {ema_val}, super_trend_arr: {super_trend_arr}, super_trend_arr_old: {super_trend_arr_old}")
+        f"Message : Interval {interval} min, Close: {close_val}, Open: {open_val}, RSI: {rsi_val}, EMA: {ema_val}, BB width: {bb_width}, super_trend_arr: {super_trend_arr}, super_trend_arr_old: {super_trend_arr_old}")
 
     call_strategy(super_trend_arr, super_trend_arr_old,
                   timing, close_val, open_val, rsi_val, high_val, low_val, ema_val, bb_width, atr_val)
@@ -233,7 +230,7 @@ def put_strategy(super_trend_arr, super_trend_arr_old, timing, close_val, open_v
         and high_val < ema_val
     ):
         set_put_signal(super_trend_arr, super_trend_arr_old,
-                       timing, close_val, open_val, rsi_val, ema_val, atr_val)
+                       timing, close_val, open_val, rsi_val, ema_val, atr_val, bb_width)
 
     if put_signal and (super_trend_arr.any() or (open_val > ema_val)):
         exit_put_signal(super_trend_arr, super_trend_arr_old,
@@ -252,7 +249,7 @@ def call_strategy(super_trend_arr, super_trend_arr_old, timing, close_val, open_
         and low_val > ema_val
     ):
         set_call_signal(super_trend_arr, super_trend_arr_old,
-                        timing, close_val, open_val, rsi_val, ema_val, atr_val)
+                        timing, close_val, open_val, rsi_val, ema_val, atr_val, bb_width)
 
     if call_signal and (not super_trend_arr.all() or (open_val < ema_val)):
         exit_call_signal(super_trend_arr, super_trend_arr_old,
@@ -266,8 +263,8 @@ def exit_put_signal(super_trend_arr, super_trend_arr_old, timing, close_val, ope
 
     msg = f"PUT EXIT !!! {timing}"
 
-    log_notification(True, super_trend_arr, super_trend_arr_old,
-                     close_val, open_val, rsi_val, msg)
+    log_notification(True, super_trend_arr=super_trend_arr, super_trend_arr_old=super_trend_arr_old,
+                     close_val=close_val, open_val=open_val, rsi_val=rsi_val, msg=msg)
 
     if buy_order_id:
         exit_order()
@@ -280,14 +277,14 @@ def exit_call_signal(super_trend_arr, super_trend_arr_old, timing, close_val, op
 
     msg = f"CALL EXIT !!! {timing}"
 
-    log_notification(True, super_trend_arr, super_trend_arr_old,
-                     close_val, open_val, rsi_val, msg)
+    log_notification(True, super_trend_arr=super_trend_arr, super_trend_arr_old=super_trend_arr_old,
+                     close_val=close_val, open_val=open_val, rsi_val=rsi_val, msg=msg)
 
     if buy_order_id:
         exit_order()
 
 
-def set_put_signal(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val, ema_val, atr_val):
+def set_put_signal(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val, ema_val, atr_val, bb_width):
     global put_signal
 
     put_signal = True
@@ -307,13 +304,13 @@ def set_put_signal(super_trend_arr, super_trend_arr_old, timing, close_val, open
     else:
         msg = f"PUT SIGNAL !!! {timing}, \nPUT Strike Price: {strike_price} PE, \nStop Loss:  {stoploss}"
 
-    log_notification(True, super_trend_arr, super_trend_arr_old,
-                     close_val, open_val, rsi_val, msg, ema_val)
+    log_notification(True, super_trend_arr=super_trend_arr, super_trend_arr_old=super_trend_arr_old,
+                     close_val=close_val, open_val=open_val, rsi_val=rsi_val, msg=msg, ema_val=ema_val, bb_width=bb_width)
 
     place_order("PE", strike_price, option_price, stoploss)
 
 
-def set_call_signal(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val, ema_val, atr_val):
+def set_call_signal(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val, ema_val, atr_val, bb_width):
     global call_signal
 
     call_signal = True
@@ -332,8 +329,8 @@ def set_call_signal(super_trend_arr, super_trend_arr_old, timing, close_val, ope
     else:
         msg = f"CALL SIGNAL !!! {timing},  \nCALL Strike Price: {strike_price} CE, \nStop Loss:  {stoploss}"
 
-    log_notification(True, super_trend_arr, super_trend_arr_old,
-                     close_val, open_val, rsi_val, msg, ema_val)
+    log_notification(True, super_trend_arr=super_trend_arr, super_trend_arr_old=super_trend_arr_old,
+                     close_val=close_val, open_val=open_val, rsi_val=rsi_val, msg=msg, ema_val=ema_val, bb_width=bb_width)
 
     place_order("CE", strike_price, option_price, stoploss)
 
@@ -343,16 +340,18 @@ def set_call_signal(super_trend_arr, super_trend_arr_old, timing, close_val, ope
 
 
 def get_option_token(trading_symbol):
-    token = None
-    for tick in instrument_list:
-        if tick['symbol'] == trading_symbol:
-            token = tick['token']
-            break
-    return token
+    return next(
+        (
+            tick['token']
+            for tick in instrument_list
+            if tick['symbol'] == trading_symbol
+        ),
+        None,
+    )
 
 
 def place_order(signal_type, strike_price, option_price, stoploss=20):
-    global call_option_price, put_option_price, buy_order_id, stop_loss_sell_order_id, trading_symbol, option_token
+    global call_option_price, put_option_price, buy_order_id, trading_symbol, option_token
 
     if signal_type == "CE":
         call_option_price = strike_price
@@ -378,7 +377,6 @@ def place_order(signal_type, strike_price, option_price, stoploss=20):
 def exit_order():
     global buy_order_id
 
-    # sell robo order
     # check order status before selling
     log_notification(
         True, msg="Exiting orders. Please check the orders manually")

@@ -1,14 +1,16 @@
 # pip install yfinance
 
 # region imports
-
+import itertools
 import math
+import multiprocessing
 import os
 import sys
-import itertools
-import multiprocessing
+from datetime import datetime as dt
+from datetime import timedelta
 from multiprocessing import Pool
 
+from pytz import timezone
 
 sys.path.append(os.getcwd() + r'\Bank Nifty\src\modules')   # nopep8
 import time
@@ -21,11 +23,10 @@ import pandas as pd
 import pandas_ta as ta
 import requests
 import yfinance as yf
+from indicators import atr, rsi, supertrend
 from plyer import notification
 from pytz import timezone
 from tqdm import tqdm
-
-from indicators import rsi, supertrend, atr
 
 warnings.filterwarnings("ignore")
 
@@ -33,6 +34,7 @@ warnings.filterwarnings("ignore")
 
 # region test vars
 
+time_zone = "Asia/Kolkata"
 interval = 5
 symbol = "^NSEBANK"
 
@@ -202,20 +204,22 @@ def signal_strategy(arr, timing, close_val, open_val, rsi_val,  high_val, low_va
             update_signal_result(high_val, False, high_val - put_strike_price)
 
 
-def download_data():
+def download_data(business_day=None):
 
     df = pd.read_csv(r'Bank Nifty\test data\NIFTY BANK Data.csv')
     df = df.set_index('Datetime')
     df.index = pd.to_datetime(df.index)
-    # df = df[df.index.year >= test_start_year]
-    df = df[df.index > '2022-01-16 09:15:00+05:30']
+
+    if business_day:
+        df = df[df.index > business_day]
+    else:
+        df = df[df.index.year >= test_start_year]
+
     df = df[df.index.minute % interval == 0]
     return df
 
 
-def get_results():
-    print(len(signal_start_time))
-    print(len(signal_end_time))
+def get_results(business_day=None):
     df_test_result = pd.DataFrame(
         {
             "Signal Start Time": signal_start_time,
@@ -231,10 +235,11 @@ def get_results():
         (sum(signal_is_correct) / len(signal_is_correct) * 100), 2)
     print("Sample Result:")
     results = df_test_result[df_test_result['Is Signal Correct'] == False]
-    print(df_test_result.tail(10))
+    print(df_test_result.tail(30))
 
+    date_msg = f"Start Date: {business_day}" if business_day else f"Start year: {test_start_year}"
     print(
-        f"Start year: {test_start_year} \nInterval: {interval} min \nMargin Points: {margin} \nAccuracy: {accuracy}%"
+        f"{date_msg} \nInterval: {interval} min \nMargin Points: {margin} \nAccuracy: {accuracy}%"
     )
 
     rev = sum(signal_profit) - sum(signal_loss)
@@ -260,6 +265,7 @@ def test_code(params):
     stoploss_factor = params[12]
     atr_period = params[13]
     interval = params[14]
+    business_day = params[15]
 
     call_signal = False
     put_signal = False
@@ -276,7 +282,7 @@ def test_code(params):
     signal_profit = []
     # todo remove
 
-    df = download_data()
+    df = download_data(business_day)
     df["ST_7"] = supertrend(df, st1_length, st1_factor)["in_uptrend"]
     df["ST_8"] = supertrend(df, st2_length, st2_factor)["in_uptrend"]
     df["ST_9"] = supertrend(df, st3_length, st3_factor)["in_uptrend"]
@@ -306,46 +312,87 @@ def test_code(params):
             df["ATR"][i]
         )
 
-    return get_results()
+    return get_results(business_day)
 
 
-# Margin Points: 20, Accuracy: 82.98%, Rev: 6.2K
-# Margin Points: 10, Accuracy: 93.62%, Rev: 4.1K
-# params = (7, 1.2, 10, 2.4, 9, 3, 5, 95, 0.05, 8, 150, 10, 1, 14, 5)
-# acc, pts, rev = test_code(params)
+def update_test_data(df=None):
+    input = (dt.now(timezone("Asia/Kolkata")).today() -
+             timedelta(days=59)).strftime("%Y-%m-%d")
+
+    if not df:
+        df = yf.download(symbol, start=input,
+                         period="1d", interval=str(interval) + "m")
+
+    df_test_data = pd.read_csv(
+        r'D:\Options\Bank Nifty\test data\NIFTY BANK Data.csv')
+
+    df['Datetime'] = df.index
+    df.reset_index(drop=True, inplace=True)
+
+    df_latest = df[df.Datetime > pd.Timestamp(
+        df_test_data.Datetime.iloc[-1])]
+    df_test_data = df_test_data.append(df_latest)
+    df_test_data = df_test_data[['Datetime', 'Open',
+                                 'High', 'Low',	'Close', 'Adj Close', 'Volume']]
+    df_test_data.to_csv(
+        r'D:\Options\Bank Nifty\test data\NIFTY BANK Data.csv', index=False)
+
+
+def unit_test(time_zone):
+    # Margin Points: 20, Accuracy: 82.98%, Rev: 6.2K
+    # Margin Points: 10, Accuracy: 93.62%, Rev: 4.1K
+    # present_day = (dt.now(timezone(time_zone)).today())
+    # shift = timedelta(max(7, (present_day.weekday() + 6) % 7 - 3))
+    # weekly_business_day = (present_day - shift).strftime("%Y-%m-%d")
+
+    # Go to last 7 business days
+    params = (7, 1.2, 10, 2, 9, 3, 5, 95, 0.05, 14,
+              125, 20, 2, 2, 5, '2022-02-09')
+    update_test_data()
+    return test_code(params)
 
 # endregion
 
 # region grid search
 
-accs = None
-pts_list = None
-revs = None
-results = []
-cnt = 0
 
-if __name__ == '__main__':
+def grid_search_code(time_zone):
 
-    # (7, 1.2, 10, 2.4, 9, 3, 5, 95, 0.05, 8, 150, 10, 1, 8, 5)
+    # (7, 1.2, 10, 2.4, 9, 3, 5, 95, 0.05, 8, 125, 10, 2, 2, 5)
+
+    accs = None
+    pts_list = None
+    revs = None
+    results = []
+    cnt = 0
+
+    update_test_data()
+
+    # last 7th business day
+    present_day = (dt.now(timezone(time_zone)).today())
+    shift = timedelta(max(7, (present_day.weekday() + 6) % 7 - 3))
+    weekly_business_day = (present_day - shift).strftime("%Y-%m-%d")
+
     # initialize lists
-    st1_length_list = [7]
-    st1_factor_list = [1.2]
-    st2_length_list = [10]
-    st2_factor_list = [2.4]
-    st3_length_list = [9]
-    st3_factor_list = [3]
+    st1_length_list = [7, 10]
+    st1_factor_list = [1, 1.2]
+    st2_length_list = [8, 10]
+    st2_factor_list = [2, 2.4]
+    st3_length_list = [9, 10]
+    st3_factor_list = [3, 3.6]
     rsi_period_list = [5]
     rsi_upper_limit_list = [95]
     rsi_lower_limit_list = [0.05]
-    ema_length_list = [8]
-    bb_width = [150]
+    ema_length_list = [8, 9, 14]
+    bb_width = [125, 150]
     margin = [10, 20]
-    stoploss_factor = [2]
-    atr_period = [2]
+    stoploss_factor = [1, 2]
+    atr_period = [2, 9]
     interval = [5]
+    business_day = [weekly_business_day]
 
     final = [st1_length_list, st1_factor_list, st2_length_list, st2_factor_list, st3_length_list,
-             st3_factor_list, rsi_period_list, rsi_upper_limit_list, rsi_lower_limit_list, ema_length_list, bb_width, margin, stoploss_factor, atr_period, interval]
+             st3_factor_list, rsi_period_list, rsi_upper_limit_list, rsi_lower_limit_list, ema_length_list, bb_width, margin, stoploss_factor, atr_period, interval, business_day]
     res_combos = list(itertools.product(*final))
 
     with Pool(multiprocessing.cpu_count() - 2) as p:
@@ -365,7 +412,16 @@ if __name__ == '__main__':
     print(f"Max Profit: {max(revs)}")
     print(f"Max Profit combination: {res_combos[revs.index(max(revs))]}")
 
-    print(accs)
-    print(revs)
+    # print(accs)
+    # print(revs)
+    # print(pts_list)
 
 # endregion
+
+
+if __name__ == '__main__':
+
+    # grid_search_code(time_zone)
+
+    acc, pts, rev = unit_test(time_zone)
+    print(rev)

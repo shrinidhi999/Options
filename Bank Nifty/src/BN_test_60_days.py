@@ -206,7 +206,12 @@ def download_data():
     return df
 
 
-def update_test_data(df):
+def update_test_data(df=None):
+
+    if not df:
+        df = yf.download(symbol, start=input,
+                         period="1d", interval=str(interval) + "m")
+
     df_test_data = pd.read_csv(
         r'D:\Options\Bank Nifty\test data\NIFTY BANK Data.csv')
 
