@@ -24,6 +24,7 @@ import pandas_ta as ta
 import requests
 import yfinance as yf
 from indicators import atr, rsi, supertrend
+from pandas.tseries.offsets import BDay
 from plyer import notification
 from pytz import timezone
 from tqdm import tqdm
@@ -339,15 +340,11 @@ def update_test_data(df=None):
 
 
 def unit_test(time_zone):
-    # Margin Points: 20, Accuracy: 82.98%, Rev: 6.2K
-    # Margin Points: 10, Accuracy: 93.62%, Rev: 4.1K
-    # present_day = (dt.now(timezone(time_zone)).today())
-    # shift = timedelta(max(7, (present_day.weekday() + 6) % 7 - 3))
-    # weekly_business_day = (present_day - shift).strftime("%Y-%m-%d")
+    weekly_business_day = (dt.today() - BDay(6)).strftime("%Y-%m-%d")
 
     # Go to last 7 business days
     params = (7, 1.2, 10, 2, 9, 3, 5, 95, 0.05, 14,
-              125, 20, 2, 2, 5, '2022-02-09')
+              125, 10, 2, 2, 5, weekly_business_day)
     update_test_data()
     return test_code(params)
 
@@ -368,10 +365,8 @@ def grid_search_code(time_zone):
 
     update_test_data()
 
-    # last 7th business day
-    present_day = (dt.now(timezone(time_zone)).today())
-    shift = timedelta(max(7, (present_day.weekday() + 6) % 7 - 3))
-    weekly_business_day = (present_day - shift).strftime("%Y-%m-%d")
+    # last 6th business day
+    weekly_business_day = (dt.today() - BDay(6)).strftime("%Y-%m-%d")
 
     # initialize lists
     st1_length_list = [7, 10]
@@ -424,4 +419,3 @@ if __name__ == '__main__':
     # grid_search_code(time_zone)
 
     acc, pts, rev = unit_test(time_zone)
-    print(rev)

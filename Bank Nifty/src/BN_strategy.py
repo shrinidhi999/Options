@@ -23,15 +23,14 @@ from datetime import datetime as dt
 from datetime import time as dtm
 from datetime import timedelta
 
-import pandas_ta as ta
 import pandas as pd
-
+import pandas_ta as ta
 import requests
 import yfinance as yf
-from indicators import rsi, supertrend, atr
-from order_placement import (cancel_order, get_instrument_list,
-                             get_order_status, robo_order,
-                             sell_order_market, clear_cache)
+from indicators import atr, rsi, supertrend
+from order_placement import (cancel_order, clear_cache, get_instrument_list,
+                             get_order_status, robo_order, sell_order_market)
+from pandas.tseries.offsets import BDay
 from plyer import notification
 from pytz import timezone
 
@@ -49,7 +48,7 @@ time_format = "%d-%m-%Y %H:%M"
 present_day = (dt.now(timezone(time_zone)).today())
 
 shift = timedelta(max(1, (present_day.weekday() + 6) % 7 - 3))
-last_business_day = (present_day - shift).strftime("%Y-%m-%d")
+last_business_day = (dt.today() - BDay(6)).strftime("%Y-%m-%d")
 # last_business_day = "2022-02-03"
 
 # endregion
@@ -451,7 +450,7 @@ def initial_set_up():
     instrument_list = get_instrument_list()
 
     log_notification(
-        True, msg=f"Bank Nifty Strategy Started(dd-mm-yyyy) : {dt.now(timezone(time_zone)).strftime(time_format)} \nLast business day(dd-mm-yyyy): {(present_day - shift).strftime('%d-%m-%Y')}")
+        True, msg=f"Bank Nifty Strategy Started(dd-mm-yyyy) : {dt.now(timezone(time_zone)).strftime(time_format)} \nLast business day(dd-mm-yyyy): {(dt.today() - BDay(6)).strftime('%d-%m-%Y')}")
 
     if instrument_list:
         logger.info("Instrument list downloaded")

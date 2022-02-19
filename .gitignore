@@ -133,3 +133,4 @@ Bank Nifty/BN_ST.bat
 Bank Nifty/src/test.py
 Bank Nifty/src/credentials.txt
 Bank Nifty/src/BN_test_2015.py
+Bank Nifty/joblib/order_placement/get_instrument_list/func_code.py
