@@ -25,7 +25,6 @@ import requests
 import yfinance as yf
 from indicators import atr, rsi, supertrend
 from pandas.tseries.offsets import BDay
-from plyer import notification
 from pytz import timezone
 from tqdm import tqdm
 
@@ -212,7 +211,9 @@ def download_data(business_day=None):
     df.index = pd.to_datetime(df.index)
 
     if business_day:
-        df = df[df.index > business_day]
+        df = df[df.index >= business_day]
+        # df = df[df.index >= '2021-12-07']
+        # df = df[df.index <= '2021-12-16']
     else:
         df = df[df.index.year >= test_start_year]
 
@@ -340,10 +341,10 @@ def update_test_data(df=None):
 
 
 def unit_test(time_zone):
-    weekly_business_day = (dt.today() - BDay(6)).strftime("%Y-%m-%d")
+    weekly_business_day = (dt.today() - BDay(7)).strftime("%Y-%m-%d")
 
     # Go to last 7 business days
-    params = (7, 1.2, 10, 2, 9, 3, 5, 95, 0.05, 14,
+    params = (7, 1, 8, 2, 9, 3, 5, 95, 0.05, 8,
               125, 10, 2, 2, 5, weekly_business_day)
     update_test_data()
     return test_code(params)
@@ -366,7 +367,7 @@ def grid_search_code(time_zone):
     update_test_data()
 
     # last 6th business day
-    weekly_business_day = (dt.today() - BDay(6)).strftime("%Y-%m-%d")
+    weekly_business_day = (dt.today() - BDay(7)).strftime("%Y-%m-%d")
 
     # initialize lists
     st1_length_list = [7, 10]
@@ -380,7 +381,7 @@ def grid_search_code(time_zone):
     rsi_lower_limit_list = [0.05]
     ema_length_list = [8, 9, 14]
     bb_width = [125, 150]
-    margin = [10, 20]
+    margin = [10]
     stoploss_factor = [1, 2]
     atr_period = [2, 9]
     interval = [5]

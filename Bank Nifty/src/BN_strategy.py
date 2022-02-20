@@ -44,11 +44,10 @@ warnings.filterwarnings("ignore")
 
 time_zone = "Asia/Kolkata"
 time_format = "%d-%m-%Y %H:%M"
+
 # interval = 5
 present_day = (dt.now(timezone(time_zone)).today())
-
-shift = timedelta(max(1, (present_day.weekday() + 6) % 7 - 3))
-last_business_day = (dt.today() - BDay(6)).strftime("%Y-%m-%d")
+last_business_day = (dt.today() - BDay(7)).strftime("%Y-%m-%d")
 # last_business_day = "2022-02-03"
 
 # endregion
@@ -83,7 +82,8 @@ logger = None
 symbol = "^NSEBANK"
 # symbol = "^DJUSBK"
 
-params = (7, 1.2, 10, 2, 9, 3, 5, 95, 0.05, 14, 125, 10, 2, 2, 5)
+params = (7, 1, 8, 2, 9, 3, 5, 95, 0.05, 8,
+          125, 10, 2, 2, 5)
 
 st1_length = params[0]
 st1_factor = params[1]
