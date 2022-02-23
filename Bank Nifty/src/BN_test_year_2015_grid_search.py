@@ -110,7 +110,7 @@ def update_signal_result(val, is_correct, diff_in_pts=None):
             signal_loss.append(25 * stoploss)
 
 
-def alert(arr, timing, close_val, open_val, high_val, low_val, rsi_val, ema_val, bb_width, atr_val):
+def alert(arr, timing, close_val, open_val, high_val, low_val, rsi_val, ema_val, bb_width, atr_val, prev_close, prev_open):
     global call_signal, put_signal, call_strike_price, put_strike_price, signal_end_time
 
     if len(signal_strike_price) > len(signal_result_price):
@@ -137,7 +137,7 @@ def alert(arr, timing, close_val, open_val, high_val, low_val, rsi_val, ema_val,
     timing = timing.strftime("%d-%m-%Y %H:%M")
 
     signal_strategy(arr, timing, close_val, open_val,
-                    rsi_val, high_val, low_val, ema_val, bb_width, atr_val)
+                    rsi_val, high_val, low_val, ema_val, bb_width, atr_val, prev_close, prev_open)
 
 
 def set_out_of_trade_vals(timing, high_val, low_val):
@@ -156,7 +156,7 @@ def set_out_of_trade_vals(timing, high_val, low_val):
             update_signal_result(high_val, False, high_val - put_strike_price)
 
 
-def signal_strategy(arr, timing, close_val, open_val, rsi_val,  high_val, low_val, ema_val, bb_width, atr_val):
+def signal_strategy(arr, timing, close_val, open_val, rsi_val,  high_val, low_val, ema_val, bb_width, atr_val, prev_close, prev_open):
     global call_signal, put_signal, call_strike_price, put_strike_price, signal_end_time, stoploss, margin
 
     if (
@@ -166,9 +166,12 @@ def signal_strategy(arr, timing, close_val, open_val, rsi_val,  high_val, low_va
         and close_val > open_val
         and rsi_val < rsi_upper_limit
         and low_val > ema_val
+        and open_val > prev_close
+        and open_val > prev_open
     ):
         call_signal = True
-        stoploss = atr_val * stoploss_factor
+        # stoploss = atr_val * stoploss_factor
+        stoploss = stoploss_factor
         # print(f"stoploss: {stoploss}")
         call_strike_price = high_val
         price = int(math.ceil(high_val / 100.0)) * 100
@@ -182,9 +185,12 @@ def signal_strategy(arr, timing, close_val, open_val, rsi_val,  high_val, low_va
         and close_val < open_val
         and rsi_val > rsi_lower_limit
         and high_val < ema_val
+        and open_val < prev_close
+        and open_val < prev_open
     ):
         put_signal = True
-        stoploss = atr_val * stoploss_factor
+        # stoploss = atr_val * stoploss_factor
+        stoploss = stoploss_factor
         # print(f"stoploss: {stoploss}")
         put_strike_price = low_val
         price = int(math.floor(low_val / 100.0)) * 100
@@ -311,7 +317,9 @@ def test_code(params):
             df["RSI"][i],
             df["EMA"][i],
             df["Bollinger_Width"][i],
-            df["ATR"][i]
+            df["ATR"][i],
+            df["Close"][i-1],
+            df["Open"][i-1]
         )
 
     return get_results(business_day)
@@ -340,13 +348,13 @@ def update_test_data(df=None):
         r'D:\Options\Bank Nifty\test data\NIFTY BANK Data.csv', index=False)
 
 
-def unit_test(time_zone):
-    weekly_business_day = (dt.today() - BDay(7)).strftime("%Y-%m-%d")
+def unit_test():
+    weekly_business_day = (dt.today() - BDay(6)).strftime("%Y-%m-%d")
 
     # Go to last 7 business days
     params = (7, 1, 8, 2, 9, 3, 5, 95, 0.05, 8,
-              125, 10, 2, 2, 5, weekly_business_day)
-    update_test_data()
+              125,10, 40, 2, 5, weekly_business_day)
+    # update_test_data()
     return test_code(params)
 
 # endregion
@@ -364,10 +372,10 @@ def grid_search_code(time_zone):
     results = []
     cnt = 0
 
-    update_test_data()
+    # update_test_data()
 
     # last 6th business day
-    weekly_business_day = (dt.today() - BDay(7)).strftime("%Y-%m-%d")
+    weekly_business_day = (dt.today() - BDay(6)).strftime("%Y-%m-%d")
 
     # initialize lists
     st1_length_list = [7, 10]
@@ -381,9 +389,10 @@ def grid_search_code(time_zone):
     rsi_lower_limit_list = [0.05]
     ema_length_list = [8, 9, 14]
     bb_width = [125, 150]
-    margin = [10]
-    stoploss_factor = [1, 2]
-    atr_period = [2, 9]
+    margin = [10, 20]
+    stoploss_factor = [20, 30, 40]
+    # atr_period = [2, 9]
+    atr_period = [2]
     interval = [5]
     business_day = [weekly_business_day]
 
@@ -391,7 +400,7 @@ def grid_search_code(time_zone):
              st3_factor_list, rsi_period_list, rsi_upper_limit_list, rsi_lower_limit_list, ema_length_list, bb_width, margin, stoploss_factor, atr_period, interval, business_day]
     res_combos = list(itertools.product(*final))
 
-    with Pool(multiprocessing.cpu_count() - 2) as p:
+    with Pool(multiprocessing.cpu_count() - 1) as p:
         results.extend(
             iter(tqdm(p.map(test_code, res_combos), total=len(res_combos))))
 
@@ -419,4 +428,4 @@ if __name__ == '__main__':
 
     # grid_search_code(time_zone)
 
-    acc, pts, rev = unit_test(time_zone)
+    acc, pts, rev = unit_test()

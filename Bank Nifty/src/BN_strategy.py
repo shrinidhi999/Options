@@ -1,5 +1,8 @@
 # todo - exception handling fr yf api, add a chk to determine if df.tail() has current day data
 # chk order status(open/completed/closed) before selling on exit. got msg as selling order placed but order was complete. but logic working fine
+# call/put signal is given but order placement fails, then set signal = false. so that it checks the params in the next 5min and tries to place the order
+
+# stoploss_factor
 
 # pip install yfinance
 # pip install plyer
@@ -47,14 +50,14 @@ time_format = "%d-%m-%Y %H:%M"
 
 # interval = 5
 present_day = (dt.now(timezone(time_zone)).today())
-last_business_day = (dt.today() - BDay(7)).strftime("%Y-%m-%d")
-# last_business_day = "2022-02-03"
+# last_business_day = (dt.today() - BDay(7)).strftime("%Y-%m-%d")
+last_business_day = "2022-02-15"
 
 # endregion
 
 # region order placement vars
 
-weekly_expiry = "BANKNIFTY17FEB22"
+weekly_expiry = "BANKNIFTY24FEB22"
 instrument_list = None
 call_signal = False
 put_signal = False
@@ -82,8 +85,7 @@ logger = None
 symbol = "^NSEBANK"
 # symbol = "^DJUSBK"
 
-params = (7, 1, 8, 2, 9, 3, 5, 95, 0.05, 8,
-          125, 10, 2, 2, 5)
+params = (7, 1, 8, 2, 9, 3, 5, 95, 0.05, 8, 125, 10, 40, 2, 5)
 
 st1_length = params[0]
 st1_factor = params[1]
@@ -102,7 +104,7 @@ atr_period = params[13]
 interval = params[14]
 
 
-margin_strike_price_units = 400
+margin_strike_price_units = 100
 val_index = -1
 
 # endregion
@@ -203,7 +205,7 @@ def is_trading_time(timing):
     return True
 
 
-def signal_alert(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val, high_val, low_val, ema_val, bb_width, atr_val):
+def signal_alert(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val, high_val, low_val, ema_val, bb_width, atr_val, prev_close_val, prev_open_val):
     print(f"Time: {timing}")
     timing = timing.strftime(time_format)
 
@@ -211,13 +213,13 @@ def signal_alert(super_trend_arr, super_trend_arr_old, timing, close_val, open_v
         f"Message : Interval {interval} min, Close: {close_val}, Open: {open_val}, RSI: {rsi_val}, EMA: {ema_val}, BB width: {bb_width}, super_trend_arr: {super_trend_arr}, super_trend_arr_old: {super_trend_arr_old}")
 
     call_strategy(super_trend_arr, super_trend_arr_old,
-                  timing, close_val, open_val, rsi_val, high_val, low_val, ema_val, bb_width, atr_val)
+                  timing, close_val, open_val, rsi_val, high_val, low_val, ema_val, bb_width, atr_val, prev_close_val, prev_open_val)
 
     put_strategy(super_trend_arr, super_trend_arr_old,
-                 timing, close_val, open_val, rsi_val, high_val, low_val, ema_val, bb_width, atr_val)
+                 timing, close_val, open_val, rsi_val, high_val, low_val, ema_val, bb_width, atr_val, prev_close_val, prev_open_val)
 
 
-def put_strategy(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val, high_val, low_val, ema_val, bb_width, atr_val):
+def put_strategy(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val, high_val, low_val, ema_val, bb_width, atr_val, prev_close_val, prev_open_val):
     global put_signal
 
     if (
@@ -227,6 +229,8 @@ def put_strategy(super_trend_arr, super_trend_arr_old, timing, close_val, open_v
         and close_val < open_val
         and rsi_val > rsi_lower_limit
         and high_val < ema_val
+        and open_val < prev_close_val
+        and open_val < prev_open_val
     ):
         set_put_signal(super_trend_arr, super_trend_arr_old,
                        timing, close_val, open_val, rsi_val, ema_val, atr_val, bb_width)
@@ -236,7 +240,7 @@ def put_strategy(super_trend_arr, super_trend_arr_old, timing, close_val, open_v
                         timing, close_val, open_val, rsi_val)
 
 
-def call_strategy(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val, high_val, low_val, ema_val, bb_width, atr_val):
+def call_strategy(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val, high_val, low_val, ema_val, bb_width, atr_val, prev_close_val, prev_open_val):
     global call_signal
 
     if (
@@ -246,6 +250,8 @@ def call_strategy(super_trend_arr, super_trend_arr_old, timing, close_val, open_
         and close_val > open_val
         and rsi_val < rsi_upper_limit
         and low_val > ema_val
+        and open_val > prev_close_val
+        and open_val > prev_open_val
     ):
         set_call_signal(super_trend_arr, super_trend_arr_old,
                         timing, close_val, open_val, rsi_val, ema_val, atr_val, bb_width)
@@ -296,7 +302,8 @@ def set_put_signal(super_trend_arr, super_trend_arr_old, timing, close_val, open
     # option_price = get_option_price(str(strike_price) + "PE")
     option_price = 0
 
-    stoploss = stoploss_factor * atr_val
+    # stoploss = stoploss_factor * atr_val
+    stoploss = stoploss_factor
 
     if not any(super_trend_arr_old):
         msg = f"On going PUT Super Trend !!! {timing}, \nPUT Strike Price: {strike_price} PE, \nStop Loss:  {stoploss}"
@@ -321,7 +328,8 @@ def set_call_signal(super_trend_arr, super_trend_arr_old, timing, close_val, ope
     # purchasing at market price
     # option_price = get_option_price(str(strike_price) + "PE")
     option_price = 0
-    stoploss = stoploss_factor * atr_val
+    # stoploss = stoploss_factor * atr_val
+    stoploss = stoploss_factor
 
     if super_trend_arr_old.all():
         msg = f"On going Call Super Trend !!! {timing},  \nCALL Strike Price: {strike_price} CE, \nStop Loss:  {stoploss}"
@@ -428,7 +436,9 @@ def indicator_calc_signal_generation():
         df["Low"][val_index],
         df["EMA"][val_index],
         df["Bollinger_Width"][val_index],
-        df["ATR"][val_index]
+        df["ATR"][val_index],
+        df["Close"][val_index - 1],
+        df["Open"][val_index - 1]
     )
 
 
@@ -450,7 +460,7 @@ def initial_set_up():
     instrument_list = get_instrument_list()
 
     log_notification(
-        True, msg=f"Bank Nifty Strategy Started(dd-mm-yyyy) : {dt.now(timezone(time_zone)).strftime(time_format)} \nLast business day(dd-mm-yyyy): {(dt.today() - BDay(6)).strftime('%d-%m-%Y')}")
+        True, msg=f"Bank Nifty Strategy Started(dd-mm-yyyy) : {dt.now(timezone(time_zone)).strftime(time_format)} \nLast business day(dd-mm-yyyy): {(dt.today() - BDay(7)).strftime('%d-%m-%Y')}")
 
     if instrument_list:
         logger.info("Instrument list downloaded")
