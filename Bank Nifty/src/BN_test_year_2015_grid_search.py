@@ -212,7 +212,8 @@ def signal_strategy(arr, timing, close_val, open_val, rsi_val,  high_val, low_va
 
 def download_data(business_day=None):
 
-    df = pd.read_csv(r'Bank Nifty\test data\NIFTY BANK Data.csv')
+    df = pd.read_csv(
+        os.getcwd() + r'\Bank Nifty\test data\NIFTY BANK Data.csv')
     df = df.set_index('Datetime')
     df.index = pd.to_datetime(df.index)
 
@@ -334,7 +335,7 @@ def update_test_data(df=None):
                          period="1d", interval=str(interval) + "m")
 
     df_test_data = pd.read_csv(
-        r'D:\Options\Bank Nifty\test data\NIFTY BANK Data.csv')
+        os.getcwd() + r'\Bank Nifty\test data\NIFTY BANK Data.csv')
 
     df['Datetime'] = df.index
     df.reset_index(drop=True, inplace=True)
@@ -344,17 +345,17 @@ def update_test_data(df=None):
     df_test_data = df_test_data.append(df_latest)
     df_test_data = df_test_data[['Datetime', 'Open',
                                  'High', 'Low',	'Close', 'Adj Close', 'Volume']]
-    df_test_data.to_csv(
-        r'D:\Options\Bank Nifty\test data\NIFTY BANK Data.csv', index=False)
+    df_test_data.to_csv(os.getcwd() +
+                        r'\Bank Nifty\test data\NIFTY BANK Data.csv', index=False)
 
 
 def unit_test():
     weekly_business_day = (dt.today() - BDay(6)).strftime("%Y-%m-%d")
 
     # Go to last 7 business days
-    params = (7, 1, 8, 2, 9, 3, 5, 95, 0.05, 8,
-              125,10, 40, 2, 5, weekly_business_day)
-    # update_test_data()
+    params = (7, 1, 8, 2, 9, 3, 5, 95, 0.05, 8, 125,
+              10, 35, 2, 5, weekly_business_day)
+    update_test_data()
     return test_code(params)
 
 # endregion
@@ -372,7 +373,7 @@ def grid_search_code(time_zone):
     results = []
     cnt = 0
 
-    # update_test_data()
+    update_test_data()
 
     # last 6th business day
     weekly_business_day = (dt.today() - BDay(6)).strftime("%Y-%m-%d")
@@ -389,8 +390,8 @@ def grid_search_code(time_zone):
     rsi_lower_limit_list = [0.05]
     ema_length_list = [8, 9, 14]
     bb_width = [125, 150]
-    margin = [10, 20]
-    stoploss_factor = [20, 30, 40]
+    margin = [10]
+    stoploss_factor = [20, 30, 35, 40, 50]
     # atr_period = [2, 9]
     atr_period = [2]
     interval = [5]
