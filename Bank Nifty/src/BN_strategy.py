@@ -2,8 +2,6 @@
 # chk order status(open/completed/closed) before selling on exit. got msg as selling order placed but order was complete. but logic working fine
 # call/put signal is given but order placement fails, then set signal = false. so that it checks the params in the next 5min and tries to place the order
 
-# stoploss_factor
-
 # pip install yfinance
 # pip install plyer
 # pip install smartapi-python
@@ -51,13 +49,13 @@ time_format = "%d-%m-%Y %H:%M"
 # interval = 5
 present_day = (dt.now(timezone(time_zone)).today())
 # last_business_day = (dt.today() - BDay(7)).strftime("%Y-%m-%d")
-last_business_day = "2022-02-15"
+
 
 # endregion
 
 # region order placement vars
 
-weekly_expiry = "BANKNIFTY24FEB22"
+weekly_expiry = "BANKNIFTY03MAR22"
 instrument_list = None
 call_signal = False
 put_signal = False
@@ -85,7 +83,8 @@ logger = None
 symbol = "^NSEBANK"
 # symbol = "^DJUSBK"
 
-params = (7, 1, 8, 2, 9, 3.6, 5, 95, 0.05, 8, 125, 10, 50, 2, 5)
+params = (7, 1, 8, 2.4, 9, 3, 2, 95, 0.05, 21,
+          250, 10, 0.4, 21, 3, '2022-02-19', 0.35)
 
 st1_length = params[0]
 st1_factor = params[1]
@@ -102,9 +101,11 @@ margin = params[11]
 stoploss_factor = params[12]
 atr_period = params[13]
 interval = params[14]
+last_business_day = params[15]  # "2022-02-15"
+margin_factor = params[16]
 
 
-margin_strike_price_units = 100
+margin_strike_price_units = 400
 val_index = -1
 
 # endregion
@@ -159,11 +160,14 @@ def download_data():
     df = None
     try:
         df = yf.download(symbol, start=last_business_day,
-                         period="1d", interval=str(interval) + "m")
+                         period="1d", interval="1m")
+
+        df = df[df.index.minute % interval == 0]
+
         logger.info(
             "---------------------------------------------------------------------------------------------")
         logger.info(
-            f"DF downloaded : {df.tail(5)}")
+            f"DF downloaded : {df.tail(interval)}")
         # In all the sites for 5min chart there is a delay. Ex. if we check for 10am candle, it gets completed at 10.04am
         # since our logic is for 5min data, we need to drop the last candle data.
         # if df.index[-1].minute % interval != 0:
@@ -171,7 +175,7 @@ def download_data():
 
         df.drop(df.index[-1], inplace=True)
         logger.info(
-            f"DF updated : {df.tail(5)}")
+            f"DF updated : {df.tail(interval)}")
 
     except (UnboundLocalError, Exception) as e:
         print('Download failed')
@@ -186,7 +190,7 @@ def download_data():
 def is_trading_time(timing):
     global call_signal, put_signal
 
-    is_closing_time = dtm(timing.hour, timing.minute) >= dtm(13, 00)
+    is_closing_time = dtm(timing.hour, timing.minute) >= dtm(12, 45)
 
     if timing.hour < 10 or is_closing_time:
         clear_cache()
@@ -302,18 +306,19 @@ def set_put_signal(super_trend_arr, super_trend_arr_old, timing, close_val, open
     # option_price = get_option_price(str(strike_price) + "PE")
     option_price = 0
 
-    # stoploss = stoploss_factor * atr_val
-    stoploss = stoploss_factor
+    stoploss = atr_val * stoploss_factor
+    margin_val = atr_val * margin_factor
+    # stoploss = stoploss_factor
 
     if not any(super_trend_arr_old):
-        msg = f"On going PUT Super Trend !!! {timing}, \nPUT Strike Price: {strike_price} PE, \nStop Loss:  {stoploss}"
+        msg = f"On going PUT Super Trend !!! {timing}, \nPUT Strike Price: {strike_price} PE, \nStop Loss:  {stoploss}, \nMargin: {margin_val}"
     else:
-        msg = f"PUT SIGNAL !!! {timing}, \nPUT Strike Price: {strike_price} PE, \nStop Loss:  {stoploss}"
+        msg = f"PUT SIGNAL !!! {timing}, \nPUT Strike Price: {strike_price} PE, \nStop Loss:  {stoploss}, \nMargin: {margin_val}"
 
     log_notification(True, super_trend_arr=super_trend_arr, super_trend_arr_old=super_trend_arr_old,
                      close_val=close_val, open_val=open_val, rsi_val=rsi_val, msg=msg, ema_val=ema_val, bb_width=bb_width)
 
-    place_order("PE", strike_price, option_price, stoploss)
+    place_order("PE", strike_price, option_price, margin_val, stoploss)
 
 
 def set_call_signal(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val, ema_val, atr_val, bb_width):
@@ -328,18 +333,19 @@ def set_call_signal(super_trend_arr, super_trend_arr_old, timing, close_val, ope
     # purchasing at market price
     # option_price = get_option_price(str(strike_price) + "PE")
     option_price = 0
-    # stoploss = stoploss_factor * atr_val
-    stoploss = stoploss_factor
+    stoploss = atr_val * stoploss_factor
+    margin_val = atr_val * margin_factor
+    # stoploss = stoploss_factor
 
     if super_trend_arr_old.all():
-        msg = f"On going Call Super Trend !!! {timing},  \nCALL Strike Price: {strike_price} CE, \nStop Loss:  {stoploss}"
+        msg = f"On going Call Super Trend !!! {timing},  \nCALL Strike Price: {strike_price} CE, \nStop Loss:  {stoploss}, \nMargin: {margin_val}"
     else:
-        msg = f"CALL SIGNAL !!! {timing},  \nCALL Strike Price: {strike_price} CE, \nStop Loss:  {stoploss}"
+        msg = f"CALL SIGNAL !!! {timing},  \nCALL Strike Price: {strike_price} CE, \nStop Loss:  {stoploss}, \nMargin: {margin_val}"
 
     log_notification(True, super_trend_arr=super_trend_arr, super_trend_arr_old=super_trend_arr_old,
                      close_val=close_val, open_val=open_val, rsi_val=rsi_val, msg=msg, ema_val=ema_val, bb_width=bb_width)
 
-    place_order("CE", strike_price, option_price, stoploss)
+    place_order("CE", strike_price, option_price, margin_val, stoploss)
 
 # endregion
 
@@ -357,7 +363,7 @@ def get_option_token(trading_symbol):
     )
 
 
-def place_order(signal_type, strike_price, option_price, stoploss=20):
+def place_order(signal_type, strike_price, option_price, margin_val=20, stoploss=20):
     global call_option_price, put_option_price, buy_order_id, trading_symbol, option_token
 
     if signal_type == "CE":
@@ -365,13 +371,18 @@ def place_order(signal_type, strike_price, option_price, stoploss=20):
     else:
         put_option_price = strike_price
 
+    stoploss = min(stoploss, 30)
+    stoploss = 30 if math.isnan(stoploss) else stoploss
+
+    margin_val = 10 if math.isnan(margin_val) else margin_val
+
     option_tick = str(strike_price) + signal_type
     trading_symbol = weekly_expiry + option_tick
 
     option_token = get_option_token(trading_symbol)
 
     buy_result = robo_order(trading_symbol, option_token,
-                            option_price, quantity, margin, stoploss)
+                            option_price, quantity, margin_val, stoploss)
     if buy_result['status'] == 201:
         buy_order_id = buy_result['order_id']
         buy_order_status = get_order_status(buy_order_id)
@@ -460,7 +471,7 @@ def initial_set_up():
     instrument_list = get_instrument_list()
 
     log_notification(
-        True, msg=f"Bank Nifty Strategy Started(dd-mm-yyyy) : {dt.now(timezone(time_zone)).strftime(time_format)} \nLast business day(dd-mm-yyyy): {(dt.today() - BDay(7)).strftime('%d-%m-%Y')}")
+        True, msg=f"Bank Nifty Strategy Started(dd-mm-yyyy) : {dt.now(timezone(time_zone)).strftime(time_format)} \nLast business day(yyyy-mm-dd): {last_business_day}")
 
     if instrument_list:
         logger.info("Instrument list downloaded")

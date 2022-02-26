@@ -82,7 +82,7 @@ def get_order_details_full(order_id):
         print(f"Exception : {e}")
 
 
-def robo_order(trading_symbol, token, price, quantity, square_off=20, stoploss=50):
+def robo_order(trading_symbol, token, price, quantity, square_off=20, stoploss=40):
     try:
         obj = get_account_details()
         orderparams = {
