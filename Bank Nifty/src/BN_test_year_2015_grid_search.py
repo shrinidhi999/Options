@@ -241,7 +241,7 @@ def download_data(business_day=None):
     df.index = pd.to_datetime(df.index)
 
     # df = yf.download(symbol, start=(dt.now(timezone("Asia/Kolkata")).today() -
-    #                                 timedelta(days=6)).strftime("%Y-%m-%d"),
+    #                                 timedelta(days=5)).strftime("%Y-%m-%d"),
     #                  period="1d", interval="1m")
     # df.to_csv(os.getcwd() + r'\Bank Nifty\test data\NIFTY BANK Data_1Min.csv')
 
@@ -386,10 +386,10 @@ def unit_test():
     # weekly_business_day = (dt.today() - BDay(7)).strftime("%Y-%m-%d")
 
     weekly_business_day = (dt.now(timezone("Asia/Kolkata")).today() -
-                           timedelta(days=6)).strftime("%Y-%m-%d")
+                           timedelta(days=5)).strftime("%Y-%m-%d")
 
-    params = (7, 1, 8, 2.4, 9, 3, 2, 95, 0.05, 21,
-              250, 10, 0.4, 21, 3, '2022-02-19', 0.35)
+    params = (7, 1, 8, 2, 9, 3.6, 2, 95, 0.05, 5,
+              250, 10, 0.4, 8, 3, '2022-02-22', 0.4)
 
     # update_test_data()
     return test_code(params)
@@ -411,7 +411,7 @@ def grid_search_code(time_zone):
 
     # last 6th business day
     weekly_business_day = (dt.now(timezone("Asia/Kolkata")).today() -
-                           timedelta(days=6)).strftime("%Y-%m-%d")
+                           timedelta(days=5)).strftime("%Y-%m-%d")
 
     # initialize lists
     st1_length_list = [7, 10]
@@ -423,14 +423,14 @@ def grid_search_code(time_zone):
     rsi_period_list = [2]
     rsi_upper_limit_list = [95]
     rsi_lower_limit_list = [0.05]
-    ema_length_list = [21]
+    ema_length_list = [5, 8, 21]
     bb_width = [250]
     margin = [10]
-    stoploss_factor = [0.4, 0.575]
-    atr_period = [21]
-    interval = [2]
+    stoploss_factor = [0.4, 0.5]
+    atr_period = [5, 8, 21]
+    interval = [3]
     business_day = [weekly_business_day]
-    margin_factor = [0.4, 0.575]
+    margin_factor = [0.4, 0.5]
 
     final = [st1_length_list, st1_factor_list, st2_length_list, st2_factor_list, st3_length_list,
              st3_factor_list, rsi_period_list, rsi_upper_limit_list, rsi_lower_limit_list, ema_length_list, bb_width, margin, stoploss_factor, atr_period, interval, business_day, margin_factor]
@@ -447,8 +447,8 @@ def grid_search_code(time_zone):
     print(f"Max Accuracy: {max(accs)}")
     print(f"Max accuracy combination: {res_combos[accs.index(max(accs))]}")
 
-    print(accs)
-    print(res_combos)
+    # print(accs)
+    # print(res_combos)
     # print(f"Max Signals generated: {max(pts_list)}")
     # print(f"Max Signals Index: {pts_list.index(max(pts_list))}")
 
