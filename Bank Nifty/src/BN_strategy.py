@@ -59,12 +59,14 @@ weekly_expiry = "BANKNIFTY03MAR22"
 instrument_list = None
 call_signal = False
 put_signal = False
-call_option_price = 0
-put_option_price = 0
 trading_symbol = None
 option_token = None
 quantity = 25
 buy_order_id = None
+
+call_strike_price = 0
+put_strike_price = 0
+stoploss = 0
 
 # endregion
 
@@ -83,8 +85,8 @@ logger = None
 symbol = "^NSEBANK"
 # symbol = "^DJUSBK"
 
-params = (7, 1, 8, 2, 9, 3.6, 2, 95, 0.05, 5,
-          250, 10, 0.4, 8, 3, '2022-02-22', 0.4)
+params = (7, 1, 8, 2.4, 9, 3, 2, 95, 0.05, 21,
+          250, 10, 0.6, 21, 3, '2022-02-23', 0.45)
 
 st1_length = params[0]
 st1_factor = params[1]
@@ -105,7 +107,7 @@ last_business_day = params[15]  # "2022-02-15"
 margin_factor = params[16]
 
 
-margin_strike_price_units = 400
+margin_strike_price_units = 700
 val_index = -1
 
 # endregion
@@ -210,11 +212,24 @@ def is_trading_time(timing):
 
 
 def signal_alert(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val, high_val, low_val, ema_val, bb_width, atr_val, prev_close_val, prev_open_val):
+    global call_signal, put_signal, call_strike_price, put_strike_price
+
     print(f"Time: {timing}")
     timing = timing.strftime(time_format)
 
     logger.info(
         f"Message : Interval {interval} min, Close: {close_val}, Open: {open_val}, RSI: {rsi_val}, EMA: {ema_val}, BB width: {bb_width}, super_trend_arr: {super_trend_arr}, super_trend_arr_old: {super_trend_arr_old}")
+
+    # Keeping this code commented as sometimes option price may not move as quickly as market price.
+    # if call_signal:
+    #     if (low_val <= (call_strike_price - stoploss)) or (high_val >= (call_strike_price + margin)):
+    #         call_signal = put_signal = False
+    #         call_strike_price = put_strike_price = 0
+
+    # elif put_signal:
+    #     if (high_val >= (put_strike_price + stoploss)) or (low_val <= (put_strike_price - margin)):
+    #         call_signal = put_signal = False
+    #         call_strike_price = put_strike_price = 0
 
     call_strategy(super_trend_arr, super_trend_arr_old,
                   timing, close_val, open_val, rsi_val, high_val, low_val, ema_val, bb_width, atr_val, prev_close_val, prev_open_val)
@@ -239,7 +254,7 @@ def put_strategy(super_trend_arr, super_trend_arr_old, timing, close_val, open_v
         set_put_signal(super_trend_arr, super_trend_arr_old,
                        timing, close_val, open_val, rsi_val, ema_val, atr_val, bb_width)
 
-    if put_signal and (super_trend_arr.any() or (open_val > ema_val)):
+    if put_signal and ((super_trend_arr[2] == True) or (open_val > ema_val)):
         exit_put_signal(super_trend_arr, super_trend_arr_old,
                         timing, close_val, open_val, rsi_val)
 
@@ -260,7 +275,7 @@ def call_strategy(super_trend_arr, super_trend_arr_old, timing, close_val, open_
         set_call_signal(super_trend_arr, super_trend_arr_old,
                         timing, close_val, open_val, rsi_val, ema_val, atr_val, bb_width)
 
-    if call_signal and (not super_trend_arr.all() or (open_val < ema_val)):
+    if call_signal and ((super_trend_arr[2] == False) or (open_val < ema_val)):
         exit_call_signal(super_trend_arr, super_trend_arr_old,
                          timing, close_val, open_val, rsi_val)
 
@@ -363,18 +378,21 @@ def get_option_token(trading_symbol):
     )
 
 
-def place_order(signal_type, strike_price, option_price, margin_val=20, stoploss=20):
-    global call_option_price, put_option_price, buy_order_id, trading_symbol, option_token
+def place_order(signal_type, strike_price, option_price, margin_val, stoploss_val):
+    global buy_order_id, trading_symbol, option_token, margin, stoploss, call_strike_price, put_strike_price
 
     if signal_type == "CE":
-        call_option_price = strike_price
+        call_strike_price = strike_price
     else:
-        put_option_price = strike_price
+        put_strike_price = strike_price
 
-    stoploss = min(stoploss, 30)
-    stoploss = 30 if math.isnan(stoploss) else stoploss
+    stoploss_val = min(stoploss_val, 30)
+    stoploss_val = 30 if math.isnan(stoploss_val) else stoploss_val
 
     margin_val = 10 if math.isnan(margin_val) else margin_val
+
+    margin = margin_val
+    stoploss = stoploss_val
 
     option_tick = str(strike_price) + signal_type
     trading_symbol = weekly_expiry + option_tick
@@ -382,7 +400,7 @@ def place_order(signal_type, strike_price, option_price, margin_val=20, stoploss
     option_token = get_option_token(trading_symbol)
 
     buy_result = robo_order(trading_symbol, option_token,
-                            option_price, quantity, margin_val, stoploss)
+                            option_price, quantity, margin_val, stoploss_val)
     if buy_result['status'] == 201:
         buy_order_id = buy_result['order_id']
         buy_order_status = get_order_status(buy_order_id)

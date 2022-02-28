@@ -9,7 +9,6 @@ import sys
 from datetime import datetime as dt
 from datetime import timedelta
 from multiprocessing import Pool
-from numpy import NaN
 
 from pytz import timezone
 
@@ -100,8 +99,13 @@ def update_signal_vals(sig_time, sig_type, sig_price, stoploss=0, margin_val=0):
 # diff - used when this method is called when timeout happens
 
 
-def update_signal_result(val, is_correct, diff_in_pts=None):
-    global signal_result_price, signal_is_correct, signal_loss, signal_profit, loss_day
+def update_signal_result(val, is_correct, diff_in_pts=None, timing=None):
+    global signal_result_price, signal_is_correct, signal_loss, signal_profit, loss_day, call_signal, put_signal
+
+    # Keeping this code commented as sometimes option price may not move as quickly as market price.
+    # call_signal = False
+    # put_signal = False
+    # signal_end_time.append(timing.strftime("%d-%m-%Y %H:%M"))
 
     signal_result_price.append(val)
     signal_is_correct.append(is_correct)
@@ -122,17 +126,17 @@ def alert(arr, timing, close_val, open_val, high_val, low_val, rsi_val, ema_val,
     if len(signal_strike_price) > len(signal_result_price):
         if call_signal:
             if (low_val <= (call_strike_price - stoploss)):
-                update_signal_result(low_val, False)
+                update_signal_result(low_val, False, timing=timing)
 
             elif (high_val >= (call_strike_price + margin)):
-                update_signal_result(high_val, True)
+                update_signal_result(high_val, True, timing=timing)
 
         elif put_signal:
             if (high_val >= (put_strike_price + stoploss)):
-                update_signal_result(high_val, False)
+                update_signal_result(high_val, False, timing=timing)
 
             elif (low_val <= (put_strike_price - margin)):
-                update_signal_result(low_val, True)
+                update_signal_result(low_val, True, timing=timing)
 
     is_closing_time = time(timing.hour, timing.minute) >= time(12, 45)
     is_opening_time = time(timing.hour, timing.minute) <= time(10, 00)
@@ -154,13 +158,15 @@ def set_out_of_trade_vals(timing, high_val, low_val):
         call_signal = False
         signal_end_time.append(timing.strftime("%d-%m-%Y %H:%M"))
         if len(signal_strike_price) > len(signal_result_price):
-            update_signal_result(low_val, False, call_strike_price - low_val)
+            update_signal_result(
+                low_val, False, call_strike_price - low_val, timing=timing)
 
     elif put_signal:
         put_signal = False
         signal_end_time.append(timing.strftime("%d-%m-%Y %H:%M"))
         if len(signal_strike_price) > len(signal_result_price):
-            update_signal_result(high_val, False, high_val - put_strike_price)
+            update_signal_result(high_val, False, high_val -
+                                 put_strike_price, timing=timing)
 
 
 def signal_strategy(arr, timing, close_val, open_val, rsi_val,  high_val, low_val, ema_val, bb_width, atr_val, prev_close, prev_open):
@@ -220,17 +226,19 @@ def signal_strategy(arr, timing, close_val, open_val, rsi_val,  high_val, low_va
         price -= 100
         update_signal_vals(timing, "PUT", low_val, stoploss, margin)
 
-    if call_signal and (not arr.all() or (open_val < ema_val)):
+    if call_signal and ((arr[2] == False) or (open_val < ema_val)):
         call_signal = False
         signal_end_time.append(timing)
         if len(signal_strike_price) > len(signal_result_price):
-            update_signal_result(low_val, False, call_strike_price - low_val)
+            update_signal_result(
+                low_val, False, call_strike_price - low_val, timing=timing)
 
-    if put_signal and (arr.any() or (open_val > ema_val)):
+    if put_signal and ((arr[2] == True) or (open_val > ema_val)):
         put_signal = False
         signal_end_time.append(timing)
         if len(signal_strike_price) > len(signal_result_price):
-            update_signal_result(high_val, False, high_val - put_strike_price)
+            update_signal_result(high_val, False, high_val -
+                                 put_strike_price, timing=timing)
 
 
 def download_data(business_day=None):
@@ -388,8 +396,8 @@ def unit_test():
     weekly_business_day = (dt.now(timezone("Asia/Kolkata")).today() -
                            timedelta(days=5)).strftime("%Y-%m-%d")
 
-    params = (7, 1, 8, 2, 9, 3.6, 2, 95, 0.05, 5,
-              250, 10, 0.4, 8, 3, '2022-02-22', 0.4)
+    params = (7, 1, 8, 2.4, 9, 3, 2, 95, 0.05, 21,
+              250, 10, 0.6, 21, 3, '2022-02-23', 0.45)
 
     # update_test_data()
     return test_code(params)
@@ -423,11 +431,11 @@ def grid_search_code(time_zone):
     rsi_period_list = [2]
     rsi_upper_limit_list = [95]
     rsi_lower_limit_list = [0.05]
-    ema_length_list = [5, 8, 21]
+    ema_length_list = [5, 21]
     bb_width = [250]
     margin = [10]
-    stoploss_factor = [0.4, 0.5]
-    atr_period = [5, 8, 21]
+    stoploss_factor = [0.5, 0.6, 0.7]
+    atr_period = [5, 21]
     interval = [3]
     business_day = [weekly_business_day]
     margin_factor = [0.4, 0.5]
@@ -447,12 +455,21 @@ def grid_search_code(time_zone):
     print(f"Max Accuracy: {max(accs)}")
     print(f"Max accuracy combination: {res_combos[accs.index(max(accs))]}")
 
+    print("Combinations with max accuracy:")
+    for i in range(len(accs)):
+        if accs[i] == max(accs):
+            print(res_combos[i])
+            print(f"Revenue: {revs[i]}")
+            print("-------------------")
+
     # print(accs)
     # print(res_combos)
     # print(f"Max Signals generated: {max(pts_list)}")
     # print(f"Max Signals Index: {pts_list.index(max(pts_list))}")
 
     print(f"Max Profit: {max(revs)}")
+    print(
+        f"Acuuracy for Max Profit combination: {accs[revs.index(max(revs))]}")
     print(f"Max Profit combination: {res_combos[revs.index(max(revs))]}")
 
     # print(accs)
