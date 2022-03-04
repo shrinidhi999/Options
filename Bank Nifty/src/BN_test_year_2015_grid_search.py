@@ -73,6 +73,7 @@ stoploss_factor = 1
 margin_factor = 1
 atr_period = 10
 bb_width_min = 250
+bb_length = 12
 
 st1_length = 10
 st1_factor = 1
@@ -173,18 +174,17 @@ def signal_strategy(arr, timing, close_val, open_val, rsi_val,  high_val, low_va
     global call_signal, put_signal, call_strike_price, put_strike_price, signal_end_time, stoploss, margin
 
     if (
-        bb_width > bb_width_min
+        bb_width >= bb_width_min
         and arr.all()
         and call_signal == False
         and close_val > open_val
         and rsi_val < rsi_upper_limit
-        and low_val > ema_val
+        # # and low_val > ema_val
         and open_val > prev_close
         and open_val > prev_open
     ):
         call_signal = True
-        # stoploss = atr_val * stoploss_factor
-        # margin = atr_val * margin_factor
+
         stoploss = min(atr_val * stoploss_factor, 30)
         stoploss = 30 if math.isnan(stoploss) else stoploss
 
@@ -199,19 +199,16 @@ def signal_strategy(arr, timing, close_val, open_val, rsi_val,  high_val, low_va
         update_signal_vals(timing, "CALL", high_val, stoploss, margin)
 
     if (
-        bb_width > bb_width_min
+        bb_width >= bb_width_min
         and not any(arr)
         and put_signal == False
         and close_val < open_val
         and rsi_val > rsi_lower_limit
-        and high_val < ema_val
+        # # and high_val < ema_val
         and open_val < prev_close
         and open_val < prev_open
     ):
         put_signal = True
-
-        # stoploss = atr_val * stoploss_factor
-        # margin = atr_val * margin_factor
 
         stoploss = min(atr_val * stoploss_factor, 30)
         stoploss = 30 if math.isnan(stoploss) else stoploss
@@ -226,14 +223,14 @@ def signal_strategy(arr, timing, close_val, open_val, rsi_val,  high_val, low_va
         price -= 100
         update_signal_vals(timing, "PUT", low_val, stoploss, margin)
 
-    if call_signal and ((arr[2] == False) or (open_val < ema_val)):
+    if call_signal and ((arr[1] == False)):
         call_signal = False
         signal_end_time.append(timing)
         if len(signal_strike_price) > len(signal_result_price):
             update_signal_result(
                 low_val, False, call_strike_price - low_val, timing=timing)
 
-    if put_signal and ((arr[2] == True) or (open_val > ema_val)):
+    if put_signal and ((arr[1] == True)):
         put_signal = False
         signal_end_time.append(timing)
         if len(signal_strike_price) > len(signal_result_price):
@@ -244,14 +241,14 @@ def signal_strategy(arr, timing, close_val, open_val, rsi_val,  high_val, low_va
 def download_data(business_day=None):
 
     df = pd.read_csv(
-        os.getcwd() + r'\Bank Nifty\test data\NIFTY BANK Data_1Min.csv')
+        os.getcwd() + r'\Bank Nifty\test data\NIFTY BANK Data_2Min.csv')
     df = df.set_index('Datetime')
     df.index = pd.to_datetime(df.index)
 
-    # df = yf.download(symbol, start=(dt.now(timezone("Asia/Kolkata")).today() -
-    #                                 timedelta(days=5)).strftime("%Y-%m-%d"),
-    #                  period="1d", interval="1m")
-    # df.to_csv(os.getcwd() + r'\Bank Nifty\test data\NIFTY BANK Data_1Min.csv')
+    # weekly_business_day = (dt.now() - BDay(7)).strftime("%Y-%m-%d")
+    # df = yf.download(symbol, start=weekly_business_day,
+    #                  period="1d", interval="2m")
+    # df.to_csv(os.getcwd() + r'\Bank Nifty\test data\NIFTY BANK Data_2Min.csv')
 
     if business_day:
         df = df[df.index >= business_day]
@@ -260,7 +257,7 @@ def download_data(business_day=None):
     else:
         df = df[df.index.year >= test_start_year]
 
-    df = df[df.index.minute % interval == 0]
+    # df = df[df.index.minute % interval == 0]
     return df
 
 
@@ -278,8 +275,10 @@ def get_results(business_day=None):
         }
     )
 
-    accuracy = round(
-        (sum(signal_is_correct) / len(signal_is_correct) * 100), 2)
+    accuracy = 0
+    if len(signal_is_correct) > 0:
+        accuracy = round(
+            (sum(signal_is_correct) / len(signal_is_correct) * 100), 2)
     print("Sample Result:")
     results = df_test_result[df_test_result['Is Signal Correct'] == False]
     print(df_test_result.tail(30))
@@ -295,7 +294,7 @@ def get_results(business_day=None):
 
 
 def test_code(params):
-    global st1_length, st1_factor, st2_length, st2_factor, st3_length, st3_factor, rsi_period, rsi_upper_limit, rsi_lower_limit, ema_length, bb_width_min, call_signal, put_signal, call_strike_price, put_strike_price, signal_start_time, signal_end_time, signal_type, signal_strike_price, signal_result_price, signal_is_correct, margin, stoploss_factor, signal_loss, signal_profit, atr_period, interval, today, signal_stoploss, margin_factor, signal_margin
+    global st1_length, st1_factor, st2_length, st2_factor, st3_length, st3_factor, rsi_period, rsi_upper_limit, rsi_lower_limit, ema_length, bb_width_min, call_signal, put_signal, call_strike_price, put_strike_price, signal_start_time, signal_end_time, signal_type, signal_strike_price, signal_result_price, signal_is_correct, margin, stoploss_factor, signal_loss, signal_profit, atr_period, interval, today, signal_stoploss, margin_factor, signal_margin, bb_length
 
     st1_length = params[0]
     st1_factor = params[1]
@@ -314,6 +313,7 @@ def test_code(params):
     interval = params[14]
     business_day = params[15]
     margin_factor = params[16]
+    bb_length = params[17]
 
     call_signal = False
     put_signal = False
@@ -339,10 +339,10 @@ def test_code(params):
     df["ATR"] = atr(df, atr_period)
     df["RSI"] = rsi(df, periods=rsi_period)
     df["EMA"] = ta.ema(df["Close"], length=ema_length)
-    bollinger_band = ta.bbands(df["Close"], length=20, std=2)[
-        ["BBL_20_2.0", "BBU_20_2.0"]]
-    df["Bollinger_Width"] = bollinger_band["BBU_20_2.0"] - \
-        bollinger_band["BBL_20_2.0"]
+    bollinger_band = ta.bbands(df["Close"], length=bb_length, std=2)[
+        [f"BBL_{bb_length}_2.0", f"BBU_{bb_length}_2.0"]]
+    df["Bollinger_Width"] = bollinger_band[f"BBU_{bb_length}_2.0"] - \
+        bollinger_band[f"BBL_{bb_length}_2.0"]
 
     for i in tqdm(range(len(df))):
         today = dt.date(df.index[i])
@@ -391,13 +391,10 @@ def update_test_data(df=None):
 
 
 def unit_test():
-    # weekly_business_day = (dt.today() - BDay(7)).strftime("%Y-%m-%d")
+    weekly_business_day = (dt.now() - BDay(7)).strftime("%Y-%m-%d")
 
-    weekly_business_day = (dt.now(timezone("Asia/Kolkata")).today() -
-                           timedelta(days=5)).strftime("%Y-%m-%d")
-
-    params = (7, 1, 8, 2.4, 9, 3, 2, 95, 0.05, 21,
-              250, 10, 0.6, 21, 3, '2022-02-23', 0.45)
+    params = (7, 1, 8, 2.4, 10, 3, 5, 95, 0.05, 8, 225,
+              10, 0.7, 8, 2, '2022-02-22', 0.4, 20)
 
     # update_test_data()
     return test_code(params)
@@ -417,9 +414,8 @@ def grid_search_code(time_zone):
 
     # update_test_data()
 
-    # last 6th business day
-    weekly_business_day = (dt.now(timezone("Asia/Kolkata")).today() -
-                           timedelta(days=5)).strftime("%Y-%m-%d")
+    # last 7th business day
+    weekly_business_day = (dt.now() - BDay(7)).strftime("%Y-%m-%d")
 
     # initialize lists
     st1_length_list = [7, 10]
@@ -428,23 +424,24 @@ def grid_search_code(time_zone):
     st2_factor_list = [2, 2.4]
     st3_length_list = [9, 10]
     st3_factor_list = [3, 3.6]
-    rsi_period_list = [2]
+    rsi_period_list = [5]
     rsi_upper_limit_list = [95]
     rsi_lower_limit_list = [0.05]
-    ema_length_list = [5, 21]
-    bb_width = [250]
+    ema_length_list = [8]
+    bb_width = [125, 225]
     margin = [10]
-    stoploss_factor = [0.5, 0.6, 0.7]
-    atr_period = [5, 21]
-    interval = [3]
+    stoploss_factor = [0.7]
+    atr_period = [8]
+    interval = [2]
     business_day = [weekly_business_day]
-    margin_factor = [0.4, 0.5]
+    margin_factor = [0.4]
+    bb_length = [9, 12, 20]
 
     final = [st1_length_list, st1_factor_list, st2_length_list, st2_factor_list, st3_length_list,
-             st3_factor_list, rsi_period_list, rsi_upper_limit_list, rsi_lower_limit_list, ema_length_list, bb_width, margin, stoploss_factor, atr_period, interval, business_day, margin_factor]
+             st3_factor_list, rsi_period_list, rsi_upper_limit_list, rsi_lower_limit_list, ema_length_list, bb_width, margin, stoploss_factor, atr_period, interval, business_day, margin_factor, bb_length]
     res_combos = list(itertools.product(*final))
 
-    with Pool(multiprocessing.cpu_count() - 1) as p:
+    with Pool(multiprocessing.cpu_count() - 2) as p:
         results.extend(
             iter(tqdm(p.map(test_code, res_combos), total=len(res_combos))))
 
@@ -467,6 +464,7 @@ def grid_search_code(time_zone):
     # print(f"Max Signals generated: {max(pts_list)}")
     # print(f"Max Signals Index: {pts_list.index(max(pts_list))}")
 
+    print(f"Max Accuracy: {max(accs)}")
     print(f"Max Profit: {max(revs)}")
     print(
         f"Acuuracy for Max Profit combination: {accs[revs.index(max(revs))]}")

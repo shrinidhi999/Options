@@ -13,7 +13,7 @@
 import os
 import sys
 
-sys.path.append(os.getcwd() + r'\src\modules')  # nopep8
+sys.path.append(f"{os.getcwd()}\src\modules")  # nopep8
 
 import logging
 import math
@@ -55,7 +55,7 @@ present_day = (dt.now(timezone(time_zone)).today())
 
 # region order placement vars
 
-weekly_expiry = "BANKNIFTY03MAR22"
+weekly_expiry = "BANKNIFTY10MAR22"
 instrument_list = None
 call_signal = False
 put_signal = False
@@ -85,8 +85,8 @@ logger = None
 symbol = "^NSEBANK"
 # symbol = "^DJUSBK"
 
-params = (7, 1, 8, 2.4, 9, 3, 2, 95, 0.05, 21,
-          250, 10, 0.6, 21, 3, '2022-02-23', 0.45)
+params = (7, 1, 8, 2.4, 10, 3, 5, 95, 0.05, 8, 225,
+          10, 0.7, 8, 2, '2022-02-22', 0.4, 20)
 
 st1_length = params[0]
 st1_factor = params[1]
@@ -105,6 +105,7 @@ atr_period = params[13]
 interval = params[14]
 last_business_day = params[15]  # "2022-02-15"
 margin_factor = params[16]
+bb_length = params[17]
 
 
 margin_strike_price_units = 700
@@ -162,14 +163,14 @@ def download_data():
     df = None
     try:
         df = yf.download(symbol, start=last_business_day,
-                         period="1d", interval="1m")
+                         period="1d", interval=f"{str(interval)}m")
 
-        df = df[df.index.minute % interval == 0]
+        # df = df[df.index.minute % interval == 0]
 
         logger.info(
             "---------------------------------------------------------------------------------------------")
         logger.info(
-            f"DF downloaded : {df.tail(interval)}")
+            f"DF downloaded : {df.tail(5)}")
         # In all the sites for 5min chart there is a delay. Ex. if we check for 10am candle, it gets completed at 10.04am
         # since our logic is for 5min data, we need to drop the last candle data.
         # if df.index[-1].minute % interval != 0:
@@ -177,7 +178,7 @@ def download_data():
 
         df.drop(df.index[-1], inplace=True)
         logger.info(
-            f"DF updated : {df.tail(interval)}")
+            f"DF updated : {df.tail(5)}")
 
     except (UnboundLocalError, Exception) as e:
         print('Download failed')
@@ -242,19 +243,19 @@ def put_strategy(super_trend_arr, super_trend_arr_old, timing, close_val, open_v
     global put_signal
 
     if (
-        bb_width > bb_width_min
+        bb_width >= bb_width_min
         and not any(super_trend_arr)
         and put_signal is False
         and close_val < open_val
         and rsi_val > rsi_lower_limit
-        and high_val < ema_val
+        # and high_val < ema_val
         and open_val < prev_close_val
         and open_val < prev_open_val
     ):
         set_put_signal(super_trend_arr, super_trend_arr_old,
                        timing, close_val, open_val, rsi_val, ema_val, atr_val, bb_width)
 
-    if put_signal and ((super_trend_arr[2] == True) or (open_val > ema_val)):
+    if put_signal and ((super_trend_arr[1] == True)):
         exit_put_signal(super_trend_arr, super_trend_arr_old,
                         timing, close_val, open_val, rsi_val)
 
@@ -263,19 +264,19 @@ def call_strategy(super_trend_arr, super_trend_arr_old, timing, close_val, open_
     global call_signal
 
     if (
-        bb_width > bb_width_min
+        bb_width >= bb_width_min
         and super_trend_arr.all()
         and call_signal is False
         and close_val > open_val
         and rsi_val < rsi_upper_limit
-        and low_val > ema_val
+        # and low_val > ema_val
         and open_val > prev_close_val
         and open_val > prev_open_val
     ):
         set_call_signal(super_trend_arr, super_trend_arr_old,
                         timing, close_val, open_val, rsi_val, ema_val, atr_val, bb_width)
 
-    if call_signal and ((super_trend_arr[2] == False) or (open_val < ema_val)):
+    if call_signal and ((super_trend_arr[1] == False)):
         exit_call_signal(super_trend_arr, super_trend_arr_old,
                          timing, close_val, open_val, rsi_val)
 
@@ -444,10 +445,10 @@ def indicator_calc_signal_generation():
     df["RSI"] = rsi(df, periods=rsi_period)
     df["EMA"] = ta.ema(df["Close"], length=ema_length)
 
-    bollinger_band = ta.bbands(df["Close"], length=20, std=2)[
-        ["BBL_20_2.0", "BBU_20_2.0"]]
-    df["Bollinger_Width"] = bollinger_band["BBU_20_2.0"] - \
-        bollinger_band["BBL_20_2.0"]
+    bollinger_band = ta.bbands(df["Close"], length=bb_length, std=2)[
+        [f"BBL_{bb_length}_2.0", f"BBU_{bb_length}_2.0"]]
+    df["Bollinger_Width"] = bollinger_band[f"BBU_{bb_length}_2.0"] - \
+        bollinger_band[f"BBL_{bb_length}_2.0"]
 
     super_trend_arr = df.iloc[val_index][[
         "ST_7", "ST_8", "ST_9"]].values
@@ -512,7 +513,7 @@ def run_code():
 
         res = timing.minute % interval
 
-        if is_trading_time(timing) and res == 0:
+        if is_trading_time(timing) and res == 1:
             indicator_calc_signal_generation()
             sleep_time_in_secs = (60 - timing.second) + (interval - 1) * 60
             print(
@@ -520,7 +521,8 @@ def run_code():
 
             time.sleep(sleep_time_in_secs)
         else:
-            sleep_time = interval - res
+            # sleep_time = interval - res
+            sleep_time = 1
             print(f"Sleep Time: {sleep_time} min")
             time.sleep(sleep_time * 60)
 
