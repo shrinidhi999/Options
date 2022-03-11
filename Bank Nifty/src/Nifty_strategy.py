@@ -1,6 +1,7 @@
 # todo - exception handling fr yf api, add a chk to determine if df.tail() has current day data
 # chk order status(open/completed/closed) before selling on exit. got msg as selling order placed but order was complete. but logic working fine
 # call/put signal is given but order placement fails, then set signal = false. so that it checks the params in the next 5min and tries to place the order
+# if the stoploss/target hits, then set signal to false. To accomplish this we need to check the status of order regularly
 
 # pip install yfinance
 # pip install plyer
@@ -29,6 +30,7 @@ import pandas_ta as ta
 import requests
 import yfinance as yf
 from indicators import atr, rsi, supertrend
+from get_option_data import get_call_put_oi_diff
 from order_placement import (cancel_order, clear_cache, get_instrument_list,
                              get_order_status, robo_order, sell_order_market)
 from pandas.tseries.offsets import BDay
@@ -55,7 +57,7 @@ present_day = (dt.now(timezone(time_zone)).today())
 
 # region order placement vars
 
-weekly_expiry = "NIFTY10MAR22"
+weekly_expiry = "NIFTY17MAR22"
 instrument_list = None
 call_signal = False
 put_signal = False
@@ -67,7 +69,7 @@ buy_order_id = None
 call_strike_price = 0
 put_strike_price = 0
 stoploss = 0
-
+min_oi_diff = 5_500_000
 # endregion
 
 # region notification and log vars
@@ -85,8 +87,8 @@ logger = None
 symbol = "^NSEI"
 # symbol = "^DJUSBK"
 
-params = (7, 1, 8, 2, 9, 3, 5, 95, 0.05, 55, 75,
-          10, 1, 8, 2, '2022-02-23', 0.4, 12)
+params = (7, 1.2, 8, 2, 9, 3, 5, 95, 0.05, 200,
+          50, 10, 1.35, 5, 2, '2022-03-02', 1, 12)
 
 st1_length = params[0]
 st1_factor = params[1]
@@ -108,8 +110,10 @@ margin_factor = params[16]
 bb_length = params[17]
 
 
-margin_strike_price_units = 350
+margin_strike_price_units = 300
 val_index = -1
+max_loss_units = 20
+min_target_units = 5
 
 # endregion
 
@@ -193,8 +197,8 @@ def download_data():
 def is_trading_time(timing):
     global call_signal, put_signal
 
-    is_closing_time = dtm(timing.hour, timing.minute) >= dtm(13, 00)
-    is_opening_time = dtm(timing.hour, timing.minute) <= dtm(9, 30)
+    is_closing_time = dtm(timing.hour, timing.minute) > dtm(14, 30)
+    is_opening_time = dtm(timing.hour, timing.minute) < dtm(9, 40)
 
     if is_opening_time or is_closing_time:
         clear_cache()
@@ -211,6 +215,23 @@ def is_trading_time(timing):
             print("Out of trade timings")
         return False
     return True
+
+
+def verify_oi_diff(order_type):
+    diff_dict = get_call_put_oi_diff()
+
+    call_oi, put_oi = diff_dict['call_oi'], diff_dict['put_oi']
+    oi_diff = abs(call_oi - put_oi)
+
+    logger.info(
+        f"OI Change: Order Type : {order_type},  OI diff: {oi_diff}, Call OI: {call_oi}, Put OI: {put_oi}")
+
+    if oi_diff >= min_oi_diff:
+        if order_type == 'CE' and (call_oi < put_oi):
+            return True
+        elif order_type == 'PE' and (call_oi > put_oi):
+            return True
+    return False
 
 
 def signal_alert(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val, high_val, low_val, ema_val, bb_width, atr_val, prev_close_val, prev_open_val):
@@ -250,13 +271,18 @@ def put_strategy(super_trend_arr, super_trend_arr_old, timing, close_val, open_v
         and close_val < open_val
         and rsi_val > rsi_lower_limit
         and open_val < ema_val
-        and open_val < prev_close_val
-        and open_val < prev_open_val
+        and verify_oi_diff('PE')
+        # and open_val < prev_close_val
+        # and open_val < prev_open_val
     ):
+
         set_put_signal(super_trend_arr, super_trend_arr_old,
                        timing, close_val, open_val, rsi_val, ema_val, atr_val, bb_width)
 
     if put_signal and ((super_trend_arr[0] == True)):
+        if verify_oi_diff('PE'):
+            return
+
         exit_put_signal(super_trend_arr, super_trend_arr_old,
                         timing, close_val, open_val, rsi_val)
 
@@ -271,13 +297,17 @@ def call_strategy(super_trend_arr, super_trend_arr_old, timing, close_val, open_
         and close_val > open_val
         and rsi_val < rsi_upper_limit
         and open_val > ema_val
-        and open_val > prev_close_val
-        and open_val > prev_open_val
+        and verify_oi_diff('CE')
+        # and open_val > prev_close_val
+        # and open_val > prev_open_val
     ):
         set_call_signal(super_trend_arr, super_trend_arr_old,
                         timing, close_val, open_val, rsi_val, ema_val, atr_val, bb_width)
 
     if call_signal and ((super_trend_arr[0] == False)):
+        if verify_oi_diff('CE'):
+            return
+
         exit_call_signal(super_trend_arr, super_trend_arr_old,
                          timing, close_val, open_val, rsi_val)
 
@@ -389,10 +419,10 @@ def place_order(signal_type, strike_price, option_price, margin_val, stoploss_va
     else:
         put_strike_price = strike_price
 
-    stoploss_val = min(stoploss_val, 20)
-    stoploss_val = 20 if math.isnan(stoploss_val) else stoploss_val
+    stoploss_val = min(stoploss_val, max_loss_units)
+    stoploss_val = max_loss_units if math.isnan(stoploss_val) else stoploss_val
 
-    margin_val = 5 if math.isnan(margin_val) else margin_val
+    margin_val = min_target_units if math.isnan(margin_val) else margin_val
 
     margin = margin_val
     stoploss = stoploss_val
@@ -420,7 +450,7 @@ def exit_order():
     log_notification(
         True, msg="Exiting orders. Please check the orders manually")
 
-    # if order not yet executed. todo check order status before calling
+    # if order not yet executed. todo check order status before cancelling
     cancel_result = cancel_order(buy_order_id, "ROBO")
 
     # if order is executed. todo check order status before calling
@@ -495,7 +525,7 @@ def initial_set_up():
         True, msg=f"Nifty Strategy Started(dd-mm-yyyy) : {dt.now(timezone(time_zone)).strftime(time_format)} \nLast business day(yyyy-mm-dd): {last_business_day}")
 
     if instrument_list:
-        logger.info("Instrument list downloaded")
+        log_notification(True, msg="Instrument list downloaded")
 
     else:
         log_notification(True, msg="Instrument list download failed")

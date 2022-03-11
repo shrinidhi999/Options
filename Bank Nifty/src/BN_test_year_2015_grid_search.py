@@ -116,6 +116,7 @@ def update_signal_result(val, is_correct, diff_in_pts=None, timing=None):
     else:
         loss_day = today
         if diff_in_pts:
+            diff_in_pts = min(diff_in_pts, stoploss)
             signal_loss.append(25 * diff_in_pts)
         else:
             signal_loss.append(25 * stoploss)
@@ -139,13 +140,15 @@ def alert(arr, timing, close_val, open_val, high_val, low_val, rsi_val, ema_val,
             elif (low_val <= (put_strike_price - margin)):
                 update_signal_result(low_val, True, timing=timing)
 
-    is_closing_time = time(timing.hour, timing.minute) >= time(12, 45)
+    is_closing_time = time(timing.hour, timing.minute) >= time(14, 30)
     is_opening_time = time(timing.hour, timing.minute) <= time(10, 00)
 
     if is_opening_time or is_closing_time:
         set_out_of_trade_vals(timing, high_val, low_val)
         return
 
+    if time(timing.hour, timing.minute) >= time(12, 45):
+        return
     timing = timing.strftime("%d-%m-%Y %H:%M")
 
     signal_strategy(arr, timing, close_val, open_val,

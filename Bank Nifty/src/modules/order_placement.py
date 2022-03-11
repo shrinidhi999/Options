@@ -13,7 +13,7 @@ trailing_stop_loss = 5
 user_name = None
 pwd = None
 api_key = None
-file_path = os.getcwd() + r"\src\credentials.txt"
+file_path = f'{os.getcwd()}\\src\\credentials.txt'
 
 if os.path.exists(file_path):
     with open(file_path, "r") as file:
