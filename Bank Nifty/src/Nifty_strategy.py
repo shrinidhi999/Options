@@ -30,7 +30,7 @@ import pandas_ta as ta
 import requests
 import yfinance as yf
 from indicators import atr, rsi, supertrend
-from get_option_data import get_call_put_oi_diff
+from get_option_data import get_call_put_oi_diff_oi_tracker
 from order_placement import (cancel_order, clear_cache, get_instrument_list,
                              get_order_status, robo_order, sell_order_market)
 from pandas.tseries.offsets import BDay
@@ -218,7 +218,7 @@ def is_trading_time(timing):
 
 
 def verify_oi_diff(order_type):
-    diff_dict = get_call_put_oi_diff()
+    diff_dict = get_call_put_oi_diff_oi_tracker()
 
     call_oi, put_oi = diff_dict['call_oi'], diff_dict['put_oi']
     oi_diff = abs(call_oi - put_oi)
@@ -265,9 +265,10 @@ def put_strategy(super_trend_arr, super_trend_arr_old, timing, close_val, open_v
     global put_signal
 
     if (
-        bb_width >= bb_width_min
+        call_signal == False
+        and put_signal == False
+        and bb_width >= bb_width_min
         and not any(super_trend_arr)
-        and put_signal is False
         and close_val < open_val
         and rsi_val > rsi_lower_limit
         and open_val < ema_val
@@ -279,10 +280,7 @@ def put_strategy(super_trend_arr, super_trend_arr_old, timing, close_val, open_v
         set_put_signal(super_trend_arr, super_trend_arr_old,
                        timing, close_val, open_val, rsi_val, ema_val, atr_val, bb_width)
 
-    if put_signal and ((super_trend_arr[0] == True)):
-        if verify_oi_diff('PE'):
-            return
-
+    if put_signal and ((super_trend_arr[0] == True) and (verify_oi_diff('PE') == False)):
         exit_put_signal(super_trend_arr, super_trend_arr_old,
                         timing, close_val, open_val, rsi_val)
 
@@ -291,9 +289,10 @@ def call_strategy(super_trend_arr, super_trend_arr_old, timing, close_val, open_
     global call_signal
 
     if (
-        bb_width >= bb_width_min
+        call_signal == False
+        and put_signal == False
+        and bb_width >= bb_width_min
         and super_trend_arr.all()
-        and call_signal is False
         and close_val > open_val
         and rsi_val < rsi_upper_limit
         and open_val > ema_val
@@ -304,10 +303,7 @@ def call_strategy(super_trend_arr, super_trend_arr_old, timing, close_val, open_
         set_call_signal(super_trend_arr, super_trend_arr_old,
                         timing, close_val, open_val, rsi_val, ema_val, atr_val, bb_width)
 
-    if call_signal and ((super_trend_arr[0] == False)):
-        if verify_oi_diff('CE'):
-            return
-
+    if call_signal and ((super_trend_arr[0] == False) and (verify_oi_diff('CE') == False)):
         exit_call_signal(super_trend_arr, super_trend_arr_old,
                          timing, close_val, open_val, rsi_val)
 

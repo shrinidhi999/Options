@@ -200,6 +200,7 @@ def signal_strategy(arr, timing, close_val, open_val, rsi_val,  high_val, low_va
 
     if (
         call_signal == False
+        and put_signal == False
         and bb_width >= bb_width_min
         and arr.all()
         and close_val > open_val
@@ -225,7 +226,8 @@ def signal_strategy(arr, timing, close_val, open_val, rsi_val,  high_val, low_va
         update_signal_vals(timing, "CALL", high_val, stoploss, margin)
 
     if (
-        put_signal == False
+        call_signal == False
+        and put_signal == False
         and bb_width >= bb_width_min
         and not any(arr)
         and close_val < open_val
@@ -250,20 +252,14 @@ def signal_strategy(arr, timing, close_val, open_val, rsi_val,  high_val, low_va
         price -= 100
         update_signal_vals(timing, "PUT", low_val, stoploss, margin)
 
-    if call_signal and ((arr[0] == False)):
-        if verify_oi_diff('CE', timing):
-            return
-
+    if call_signal and ((arr[0] == False) and (verify_oi_diff('CE', timing) == False)):
         call_signal = False
         signal_end_time.append(timing)
         if len(signal_strike_price) > len(signal_result_price):
             update_signal_result(
                 low_val, False, call_strike_price - low_val, timing=timing)
 
-    if put_signal and ((arr[0] == True)):
-        if verify_oi_diff('PE', timing):
-            return
-
+    if put_signal and ((arr[0] == True) and (verify_oi_diff('PE', timing) == False)):
         put_signal = False
         signal_end_time.append(timing)
         if len(signal_strike_price) > len(signal_result_price):
