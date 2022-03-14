@@ -420,7 +420,8 @@ def update_test_data(df=None):
 def unit_test():
     weekly_business_day = (dt.now() - BDay(7)).strftime("%Y-%m-%d")
 
-    params = (7, 1.2, 8, 2, 9, 3, 5, 95, 0.05, 55, 50, 10, 1.35, 5, 2, '2022-03-03', 0.7, 12)
+    params = (7, 1.2, 8, 2, 9, 3, 5, 95, 0.05, 55, 50,
+              10, 1.35, 5, 2, '2022-03-03', 0.7, 12)
 
     return test_code(params)
 

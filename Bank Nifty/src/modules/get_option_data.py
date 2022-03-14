@@ -308,6 +308,6 @@ if __name__ == "__main__":
     # print(get_call_put_oi_diff_oi_tracker())
     # get_oi_historic_data()
     # print(get_call_put_oi_diff())
-    print(get_call_put_oi_diff_test_old("2022-03-10 10:18"))
+    # print(get_call_put_oi_diff_test_old("2022-03-10 10:18"))
     # get_call_put_oi_diff_old()
-    # clear_cache()
+    clear_cache()
