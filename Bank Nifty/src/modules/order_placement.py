@@ -33,7 +33,7 @@ def get_instrument_list():
 
 
 def clear_cache():
-    get_instrument_list.clear()
+    mem.clear(warn=False)
 
 
 def get_account_details():
