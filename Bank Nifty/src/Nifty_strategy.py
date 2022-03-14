@@ -30,7 +30,7 @@ import pandas_ta as ta
 import requests
 import yfinance as yf
 from indicators import atr, rsi, supertrend
-from get_option_data import get_call_put_oi_diff_oi_tracker, get_call_put_oi_diff
+from get_option_data import get_call_put_oi_diff_oi_tracker, get_call_put_oi_diff, get_call_put_oi_diff_old
 from order_placement import (cancel_order, clear_cache, get_instrument_list,
                              get_order_status, robo_order, sell_order_market)
 from pandas.tseries.offsets import BDay
@@ -87,8 +87,8 @@ logger = None
 symbol = "^NSEI"
 # symbol = "^DJUSBK"
 
-params = (7, 1.2, 8, 2, 9, 3, 5, 95, 0.05, 200,
-          50, 10, 1.35, 5, 2, '2022-03-02', 0.6, 12)
+params = (7, 1.2, 8, 2, 9, 3, 5, 95, 0.05, 55, 50,
+          10, 1.35, 5, 2, '2022-03-03', 0.7, 12)
 
 st1_length = params[0]
 st1_factor = params[1]
@@ -218,7 +218,7 @@ def is_trading_time(timing):
 
 
 def verify_oi_diff(order_type):
-    diff_dict = get_call_put_oi_diff()
+    diff_dict = get_call_put_oi_diff_old()
 
     call_oi, put_oi = diff_dict['call_oi'], diff_dict['put_oi']
     oi_diff = abs(call_oi - put_oi)
@@ -227,9 +227,9 @@ def verify_oi_diff(order_type):
         f"OI Change: Order Type : {order_type},  OI diff: {oi_diff}, Call OI: {call_oi}, Put OI: {put_oi}")
 
     if oi_diff >= min_oi_diff:
-        if order_type == 'CE' and (call_oi < put_oi):
+        if (order_type == 'CE') and (call_oi < put_oi):
             return True
-        elif order_type == 'PE' and (call_oi > put_oi):
+        elif (order_type == 'PE') and (call_oi > put_oi):
             return True
     return False
 
