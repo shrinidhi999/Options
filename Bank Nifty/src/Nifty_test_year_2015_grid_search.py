@@ -24,7 +24,7 @@ import pandas_ta as ta
 import requests
 import yfinance as yf
 from indicators import atr, rsi, supertrend
-from get_option_data import get_call_put_oi_diff_test, clear_cache
+from get_option_data import get_call_put_oi_diff_test, clear_cache, test_time
 from pandas.tseries.offsets import BDay
 from pytz import timezone
 from tqdm import tqdm
@@ -181,7 +181,7 @@ def verify_oi_diff(order_type, timing):
         return True
 
     timing = dt.strptime(timing, "%d-%m-%Y %H:%M").strftime("%Y-%m-%d %H:%M")
-
+    print(f"Time is {timing}")
     diff_dict = get_call_put_oi_diff_test(timing)
 
     call_oi, put_oi = diff_dict['call_oi'], diff_dict['put_oi']
