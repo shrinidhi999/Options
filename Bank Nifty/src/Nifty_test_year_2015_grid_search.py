@@ -179,7 +179,7 @@ def verify_oi_diff(order_type, timing):
     timing = dt.strptime(timing, "%d-%m-%Y %H:%M").strftime("%Y-%m-%d %H:%M")
     diff_dict = get_call_put_oi_diff_test_old(timing)
 
-    call_oi, put_oi = diff_dict['call_oi'], diff_dict['put_oi']
+    call_oi, put_oi = abs(diff_dict['call_oi']), abs(diff_dict['put_oi'])
     oi_diff = abs(call_oi - put_oi)
 
     if oi_diff >= min_oi_diff:
@@ -420,8 +420,7 @@ def update_test_data(df=None):
 def unit_test():
     weekly_business_day = (dt.now() - BDay(7)).strftime("%Y-%m-%d")
 
-    params = (7, 1.2, 8, 2, 9, 3, 5, 95, 0.05, 55, 50,
-              10, 1.35, 5, 2, '2022-03-03', 0.7, 12)
+    params = (10, 1, 10, 2, 10, 3, 5, 95, 0.05, 55, 75, 10, 1.35, 5, 2, '2022-03-04', 0.7, 12)
 
     return test_code(params)
 
@@ -456,11 +455,11 @@ def grid_search_code(time_zone):
     ema_length_list = [55, 100, 200]
     bb_width = [50, 75, 100]
     margin = [10]
-    stoploss_factor = [1.35]
+    stoploss_factor = [1.35, 1.5]
     atr_period = [5]
     interval = [2]
     business_day = [weekly_business_day]
-    margin_factor = [0.6, 1, 1.35]
+    margin_factor = [0.7, 1]
     bb_length = [12]
 
     final = [st1_length_list, st1_factor_list, st2_length_list, st2_factor_list, st3_length_list,

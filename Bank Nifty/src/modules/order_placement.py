@@ -33,7 +33,7 @@ def get_instrument_list():
 
 
 def clear_cache():
-    mem.clear(warn=False)
+    get_instrument_list.clear()
 
 
 def get_account_details():
@@ -139,9 +139,10 @@ def cancel_order(order_id, variety):
 
 
 if __name__ == "__main__":
-    pass
+    # pass
     # buy robo order
     # res = robo_order("BANKNIFTY03FEB2238200PE", 45276, 50, 25)['order_id']
     # get_order_status(res)
     # sell robo order
     # res_sel = sell_order_market(res, "BANKNIFTY03FEB2238200PE", 45276, 25)
+    clear_cache()
