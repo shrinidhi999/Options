@@ -2,6 +2,7 @@ import json
 import math
 import os
 from datetime import datetime as dt
+import re
 
 import pandas as pd
 import requests
@@ -30,20 +31,21 @@ def get_option_price(option):
                                        verify=False).json()[0].replace("null", "0"))[1]
         return float(result['lastprice'])
     except Exception as e:
-        print(e)
+        print("Inside get_option_price: ", e)
         return 0
 
 
 def get_call_put_oi_diff():
     try:
-        url = "https://api.tradingtick.com/api/data/options"
+        url = "https://tradingtick.com/data/options"
 
         payload = "{\"inst\":\"NIFTY\",\"historical\":false,\"date\":null}"
         headers = {
             'content-type': "application/json",
         }
 
-        response = requests.request("POST", url, data=payload, headers=headers)
+        response = requests.request(
+            "POST", url, data=payload, headers=headers, verify=False)
         res = eval(response.text)
 
         ce_ending = []
@@ -82,7 +84,7 @@ def get_call_put_oi_diff():
         return {'call_oi': sum_ce_ending - sum_ce_opening, 'put_oi': sum_pe_ending - sum_pe_opening}
 
     except Exception as e:
-        print(e)
+        print("Inside get_call_put_oi_diff: ", e)
         return {'call_oi': 0, 'put_oi': 0}
 
 
@@ -96,7 +98,7 @@ def get_call_put_oi_diff_oi_tracker():
         payload = "{\"ceTicker\":[\"NIFTY2231715900CE\",\"NIFTY2231715950CE\",\"NIFTY2231716000CE\",\"NIFTY2231716050CE\",\"NIFTY2231716100CE\",\"NIFTY2231716150CE\",\"NIFTY2231716200CE\",\"NIFTY2231716250CE\",\"NIFTY2231716300CE\",\"NIFTY2231716350CE\",\"NIFTY2231716400CE\",\"NIFTY2231716450CE\",\"NIFTY2231716500CE\",\"NIFTY2231716550CE\",\"NIFTY2231716600CE\",\"NIFTY2231716650CE\",\"NIFTY2231716700CE\",\"NIFTY2231716750CE\",\"NIFTY2231716800CE\",\"NIFTY2231716850CE\",\"NIFTY2231716900CE\",\"NIFTY2231716950CE\",\"NIFTY2231717000CE\",\"NIFTY2231717050CE\",\"NIFTY2231717100CE\",\"NIFTY2231717150CE\",\"NIFTY2231717200CE\",\"NIFTY2231717250CE\",\"NIFTY2231717300CE\",\"NIFTY2231717350CE\",\"NIFTY2231717400CE\"],\"peTicker\":[\"NIFTY2231715900PE\",\"NIFTY2231715950PE\",\"NIFTY2231716000PE\",\"NIFTY2231716050PE\",\"NIFTY2231716100PE\",\"NIFTY2231716150PE\",\"NIFTY2231716200PE\",\"NIFTY2231716250PE\",\"NIFTY2231716300PE\",\"NIFTY2231716350PE\",\"NIFTY2231716400PE\",\"NIFTY2231716450PE\",\"NIFTY2231716500PE\",\"NIFTY2231716550PE\",\"NIFTY2231716600PE\",\"NIFTY2231716650PE\",\"NIFTY2231716700PE\",\"NIFTY2231716750PE\",\"NIFTY2231716800PE\",\"NIFTY2231716850PE\",\"NIFTY2231716900PE\",\"NIFTY2231716950PE\",\"NIFTY2231717000PE\",\"NIFTY2231717050PE\",\"NIFTY2231717100PE\",\"NIFTY2231717150PE\",\"NIFTY2231717200PE\",\"NIFTY2231717250PE\",\"NIFTY2231717300PE\",\"NIFTY2231717350PE\",\"NIFTY2231717400PE\"]}"
         headers = {
             'content-type': "application/json",
-            'authorization': "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjYyMmQ5NTJmOGFlMTc5NjY5NWFjOWM3MSIsInBob25lTnVtYmVyIjoiODEyMzU1OTc4MiIsImVtYWlsIjoic2hyaW5pZGhpLnJtOTBAZ21haWwuY29tIiwidXNlclR5cGUiOiJmcmVlVXNlciIsImRldmljZUluZm8iOiJNb3ppbGxhLzUuMCAoV2luZG93cyBOVCAxMC4wOyBXaW42NDsgeDY0KSBBcHBsZVdlYktpdC81MzcuMzYgKEtIVE1MLCBsaWtlIEdlY2tvKSBDaHJvbWUvOTkuMC40ODQ0LjUxIFNhZmFyaS81MzcuMzYiLCJpYXQiOjE2NDcxNTQ0OTgsImV4cCI6MTY0NzI0MDg5OH0.pEYSlvn69JV7UnTDCX1rX5RicGvramHXFqJb-8Q39wE",
+            'authorization': "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjYyMmQ5NTJmOGFlMTc5NjY5NWFjOWM3MSIsInBob25lTnVtYmVyIjoiODEyMzU1OTc4MiIsImVtYWlsIjoic2hyaW5pZGhpLnJtOTBAZ21haWwuY29tIiwidXNlclR5cGUiOiJmcmVlVXNlciIsImRldmljZUluZm8iOiJNb3ppbGxhLzUuMCAoV2luZG93cyBOVCAxMC4wOyBXaW42NDsgeDY0KSBBcHBsZVdlYktpdC81MzcuMzYgKEtIVE1MLCBsaWtlIEdlY2tvKSBDaHJvbWUvOTkuMC40ODQ0Ljc0IFNhZmFyaS81MzcuMzYiLCJpYXQiOjE2NDc0MDM4MzQsImV4cCI6MTY0NzQ5MDIzNH0.GJdmCClHXXdlMxEy617kkgHNSWtwhSaetGB8fBZrv_U",
             'cache-control': "no-cache",
             'postman-token': "ab57d7fb-b79e-0e9f-aff2-4b7195c9fba8"
         }
@@ -104,25 +106,29 @@ def get_call_put_oi_diff_oi_tracker():
         response = requests.request(
             "POST", url, data=payload, headers=headers, params=querystring)
         response = response.text.replace('true', 'True')
+        response = response.replace('false', 'False')
         result = eval(response)
 
         return {'call_oi': result['result']['data'][-1]['callOi'], 'put_oi': result['result']['data'][-1]['putOi'], 'oi_diff': result['result']['data'][-1]['result']}
     except Exception as e:
-        print(e)
+        print("Inside get_call_put_oi_diff_oi_tracker: ", e)
         return {'call_oi': 0, 'put_oi': 0, 'oi_diff': 0}
 
 
 def get_call_put_oi_diff_test(timing):
     try:
-        print("inside")
-        print(timing)
+
         minute = int(timing.split(':')[1])
         minute = math.floor(minute/5)*5
 
         timing = timing.replace(timing.split(':')[1], str(minute))
 
-        response = get_oi_data_test(timing.split()[0])
-        res = eval(response.text)
+        oi_data = get_oi_data_test(timing.split()[0])
+        response = oi_data[oi_data['date'].str.contains(
+            timing.split()[0])].reset_index(drop=True)
+
+        if response.empty:
+            return {'call_oi': 0, 'put_oi': 0}
 
         ce_ending = []
         pe_ending = []
@@ -131,30 +137,23 @@ def get_call_put_oi_diff_test(timing):
 
         trade_time = dt.strptime(timing, '%Y-%m-%d %H:%M').replace(tzinfo=from_zone).astimezone(
             to_zone).strftime('%Y-%m-%dT%H:%M')
+        first_traded_time = response['date'][0]
 
-        first_traded_time = res[0][0]
-
-        for r in res:
-            if (first_traded_time) in r[0]:
-                if ("CE") in r[2]:
-                    ce_opening.append(r)
+        for _, row in response.iterrows():
+            if (first_traded_time) in row['date']:
+                if ("CE") in row['strike']:
+                    ce_opening.append(row['oi'])
                 else:
-                    pe_opening.append(r)
+                    pe_opening.append(row['oi'])
 
-            elif (trade_time) in r[0]:
-                if ("CE") in r[2]:
-                    ce_ending.append(r)
+            elif (trade_time) in row['date']:
+                if ("CE") in row['strike']:
+                    ce_ending.append(row['oi'])
                 else:
-                    pe_ending.append(r)
-
-        pe_opening = [p[4] for p in pe_opening]
-        ce_opening = [p[4] for p in ce_opening]
+                    pe_ending.append(row['oi'])
 
         sum_ce_opening = sum(ce_opening)
         sum_pe_opening = sum(pe_opening)
-
-        pe_ending = [p[4] for p in pe_ending]
-        ce_ending = [p[4] for p in ce_ending]
 
         sum_ce_ending = sum(ce_ending)
         sum_pe_ending = sum(pe_ending)
@@ -162,7 +161,7 @@ def get_call_put_oi_diff_test(timing):
         return {'call_oi': sum_ce_ending - sum_ce_opening, 'put_oi': sum_pe_ending - sum_pe_opening}
 
     except Exception as e:
-        print(e)
+        print("Inside get_call_put_oi_diff_test: ", e)
         return {'call_oi': 0, 'put_oi': 0}
 
 
@@ -171,21 +170,11 @@ def test_time(timing):
 
 
 @mem.cache(verbose=0)
-def get_oi_data_test(date):
+def get_oi_data_test(timing):
     try:
-        url = "https://api.tradingtick.com/api/data/options"
-
-        payload = json.dumps(
-            {"inst": "NIFTY", "historical": True, "date": date})
-        headers = {
-            'Content-Type': 'application/json'
-        }
-
-        return requests.request(
-            "POST", url, headers=headers, data=payload, verify=False)
-
+        return pd.read_excel(r'D:\Options\Bank Nifty\test data\Open_Interest.xlsx')
     except Exception as e:
-        print(e)
+        print("Inside get_oi_data_test: ", e)
         return None
 
 
@@ -223,7 +212,7 @@ def get_oi_historic_data():
             f"{os.getcwd()}\Bank Nifty\\test data\OI.csv", index=False)
 
     except Exception as e:
-        print(e)
+        print("Inside get_oi_historic_data: ", e)
 
 
 def get_call_put_oi_diff_old():
@@ -252,7 +241,7 @@ def get_call_put_oi_diff_old():
         return {'call_oi': call_oi, 'put_oi': put_oi}
 
     except Exception as e:
-        print(e)
+        print("Inside get_call_put_oi_diff: ", e)
         return {'call_oi': 0, 'put_oi': 0}
 
 
@@ -279,7 +268,7 @@ def get_call_put_oi_diff_test_old(timing="2022-03-10 11:13"):
         return {'call_oi': call_oi, 'put_oi': put_oi}
 
     except Exception as e:
-        print(e)
+        print("Inside get_call_put_oi_diff_test: ", e)
         return {'call_oi': 0, 'put_oi': 0}
 
 
@@ -298,16 +287,19 @@ def get_oi_data_test_old(date):
             "POST", url, headers=headers, data=payload, verify=False)
 
     except Exception as e:
-        print(e)
+        print("Inside get_oi_data_test: ", e)
         return None
 
 
 if __name__ == "__main__":
     # option_strike = "386000CE"
     # print(get_option_price(option_strike))
-    # print(get_call_put_oi_diff_oi_tracker())
+    print(get_call_put_oi_diff_oi_tracker())
     # get_oi_historic_data()
     # print(get_call_put_oi_diff())
-    # print(get_call_put_oi_diff_test_old("2022-03-10 10:18"))
+
+    # {'call_oi': 22043350, 'put_oi': 27898700}
+    # print(get_call_put_oi_diff_test(get_oi_data_test(), "2022-03-10 10:08"))
+
     # get_call_put_oi_diff_old()
-    clear_cache()
+    # clear_cache()

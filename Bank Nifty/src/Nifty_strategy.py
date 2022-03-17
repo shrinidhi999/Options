@@ -88,7 +88,7 @@ symbol = "^NSEI"
 # symbol = "^DJUSBK"
 
 params = (10, 1, 10, 2, 10, 3, 5, 95, 0.05, 55, 75,
-          10, 1.35, 5, 2, '2022-03-04', 0.7, 12)
+          10, 1.35, 5, 2, '2022-03-07', 0.7, 12)
 
 
 st1_length = params[0]
@@ -111,7 +111,7 @@ margin_factor = params[16]
 bb_length = params[17]
 
 
-margin_strike_price_units = 100
+margin_strike_price_units = 0
 val_index = -1
 max_loss_units = 20
 min_target_units = 5
@@ -219,7 +219,7 @@ def is_trading_time(timing):
 
 
 def verify_oi_diff(order_type):
-    diff_dict = get_call_put_oi_diff_old()
+    diff_dict = get_call_put_oi_diff_oi_tracker()
 
     call_oi, put_oi = abs(diff_dict['call_oi']), abs(diff_dict['put_oi'])
     oi_diff = abs(call_oi - put_oi)

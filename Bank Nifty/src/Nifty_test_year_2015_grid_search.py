@@ -24,7 +24,7 @@ import pandas_ta as ta
 import requests
 import yfinance as yf
 from indicators import atr, rsi, supertrend
-from get_option_data import get_call_put_oi_diff_test, clear_cache, get_call_put_oi_diff_test_old
+from get_option_data import get_call_put_oi_diff_test
 from pandas.tseries.offsets import BDay
 from pytz import timezone
 from tqdm import tqdm
@@ -43,6 +43,7 @@ call_signal = False
 put_signal = False
 call_strike_price = 0
 put_strike_price = 0
+
 min_oi_diff = 5_500_000
 
 signal_start_time = []
@@ -142,7 +143,7 @@ def alert(arr, timing, close_val, open_val, high_val, low_val, rsi_val, ema_val,
                 update_signal_result(low_val, True, timing=timing)
 
     is_closing_time = time(timing.hour, timing.minute) > time(14, 30)
-    is_opening_time = time(timing.hour, timing.minute) < time(9, 40)
+    is_opening_time = time(timing.hour, timing.minute) < time(9, 30)
 
     if is_opening_time or is_closing_time:
         set_out_of_trade_vals(timing, high_val, low_val)
@@ -177,7 +178,8 @@ def set_out_of_trade_vals(timing, high_val, low_val):
 
 def verify_oi_diff(order_type, timing):
     timing = dt.strptime(timing, "%d-%m-%Y %H:%M").strftime("%Y-%m-%d %H:%M")
-    diff_dict = get_call_put_oi_diff_test_old(timing)
+
+    diff_dict = get_call_put_oi_diff_test(timing)
 
     call_oi, put_oi = abs(diff_dict['call_oi']), abs(diff_dict['put_oi'])
     oi_diff = abs(call_oi - put_oi)
@@ -262,7 +264,25 @@ def signal_strategy(arr, timing, close_val, open_val, rsi_val,  high_val, low_va
                                  put_strike_price, timing=timing)
 
 
+def update_open_interest_data():
+    df = pd.read_excel(r'D:\Options\Bank Nifty\test data\Open_Interest.xlsx')
+    file_path = r'D:\Options\Bank Nifty\test data\Open_Interest.txt'
+
+    with open(file_path, "r") as file:
+        for res in file.readlines():
+            if res is None:
+                print("Copy historical OI data from network tab of https://tradingtick.com/options/callvsput and paste it in Open_Interest.txt file")
+            else:
+                res = eval(res)
+                df = df.append(res, ignore_index=True)
+
+    df.to_excel(r'D:\Options\Bank Nifty\test data\Open_Interest.xlsx',
+                index=False)
+
+
 def download_data(business_day=None):
+
+    update_open_interest_data()
 
     df = pd.read_csv(
         os.getcwd() + r'\Bank Nifty\test data\NIFTY Data_2Min.csv')
@@ -360,6 +380,7 @@ def test_code(params):
     # todo remove
 
     df = download_data(business_day)
+
     df["ST_7"] = supertrend(df, st1_length, st1_factor)["in_uptrend"]
     df["ST_8"] = supertrend(df, st2_length, st2_factor)["in_uptrend"]
     df["ST_9"] = supertrend(df, st3_length, st3_factor)["in_uptrend"]
@@ -420,7 +441,8 @@ def update_test_data(df=None):
 def unit_test():
     weekly_business_day = (dt.now() - BDay(7)).strftime("%Y-%m-%d")
 
-    params = (10, 1, 10, 2, 10, 3, 5, 95, 0.05, 55, 75, 10, 1.35, 5, 2, '2022-03-04', 0.7, 12)
+    params = (10, 1, 10, 2, 10, 3, 5, 95, 0.05, 55, 75,
+              10, 1.35, 5, 2, '2022-03-07', 0.7, 12)
 
     return test_code(params)
 
@@ -466,7 +488,7 @@ def grid_search_code(time_zone):
              st3_factor_list, rsi_period_list, rsi_upper_limit_list, rsi_lower_limit_list, ema_length_list, bb_width, margin, stoploss_factor, atr_period, interval, business_day, margin_factor, bb_length]
     res_combos = list(itertools.product(*final))
 
-    with Pool(multiprocessing.cpu_count()-2) as p:
+    with Pool(multiprocessing.cpu_count()) as p:
         results.extend(
             iter(tqdm(p.map(test_code, res_combos), total=len(res_combos))))
 
@@ -505,6 +527,6 @@ def grid_search_code(time_zone):
 
 if __name__ == '__main__':
 
-    # grid_search_code(time_zone)
+    grid_search_code(time_zone)
 
-    acc, pts, rev = unit_test()
+    # acc, pts, rev = unit_test()
