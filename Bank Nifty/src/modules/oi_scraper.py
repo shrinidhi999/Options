@@ -36,11 +36,11 @@ def get_oi_data():
         return {'call_oi': 0, 'put_oi': 0}
 
 
-def close_driver(driver):
+def close_driver():
     driver.close()
 
 
 if __name__ == '__main__':
     get_web_driver()
     print(get_oi_data())
-    close_driver(driver)
+    close_driver()

@@ -31,6 +31,7 @@ import requests
 import yfinance as yf
 from indicators import atr, rsi, supertrend
 from get_option_data import get_call_put_oi_diff_oi_tracker, get_call_put_oi_diff, get_call_put_oi_diff_old
+from oi_scraper import get_web_driver, get_oi_data, close_driver
 from order_placement import (cancel_order, clear_cache, get_instrument_list,
                              get_order_status, robo_order, sell_order_market)
 from pandas.tseries.offsets import BDay
@@ -88,7 +89,7 @@ symbol = "^NSEI"
 # symbol = "^DJUSBK"
 
 params = (10, 1, 10, 2, 10, 3, 5, 95, 0.05, 55, 75,
-          10, 1.35, 5, 2, '2022-03-07', 0.7, 12)
+          10, 1.35, 5, 2, '2022-03-07', 0.35, 12)
 
 
 st1_length = params[0]
@@ -203,6 +204,8 @@ def is_trading_time(timing):
 
     if is_opening_time or is_closing_time:
         clear_cache()
+        close_driver()
+
         if call_signal:
             call_signal = False
             log_notification(
@@ -219,7 +222,7 @@ def is_trading_time(timing):
 
 
 def verify_oi_diff(order_type):
-    diff_dict = get_call_put_oi_diff_oi_tracker()
+    diff_dict = get_oi_data()
 
     call_oi, put_oi = abs(diff_dict['call_oi']), abs(diff_dict['put_oi'])
     oi_diff = abs(call_oi - put_oi)
@@ -517,12 +520,14 @@ def initial_set_up():
     print("Weekly Expiry: ", weekly_expiry)
 
     instrument_list = get_instrument_list()
+    get_web_driver()
 
     log_notification(
         True, msg=f"Nifty Strategy Started(dd-mm-yyyy) : {dt.now(timezone(time_zone)).strftime(time_format)} \nLast business day(yyyy-mm-dd): {last_business_day}")
 
     if instrument_list:
-        log_notification(True, msg="Instrument list downloaded")
+        log_notification(
+            True, msg="Instrument list downloaded and chrome driver for OI ready")
 
     else:
         log_notification(True, msg="Instrument list download failed")
