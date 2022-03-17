@@ -29,10 +29,10 @@ def get_oi_data():
             'g', {'class': 'apexcharts-bar-series apexcharts-plot-series'})
         paths = oi_divs.find_all('path')
 
-        return {'call_oi': paths[0].get('val'), 'put_oi': paths[1].get('val')}
+        return {'call_oi': int(paths[0].get('val')), 'put_oi': int(paths[1].get('val'))}
 
     except Exception as e:
-        print(e)
+        print(f"Get OI data failed: {e}")
         return {'call_oi': 0, 'put_oi': 0}
 
 
