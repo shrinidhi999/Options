@@ -282,8 +282,6 @@ def update_open_interest_data():
 
 def download_data(business_day=None):
 
-    update_open_interest_data()
-
     df = pd.read_csv(
         os.getcwd() + r'\Bank Nifty\test data\NIFTY Data_2Min.csv')
     df = df.set_index('Datetime')
@@ -444,6 +442,7 @@ def unit_test():
     params = (10, 1, 10, 2, 10, 3, 5, 95, 0.05, 55, 75,
               10, 1.35, 5, 2, '2022-03-07', 0.7, 12)
 
+    update_open_interest_data()
     return test_code(params)
 
 # endregion
