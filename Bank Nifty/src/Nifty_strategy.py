@@ -30,7 +30,6 @@ import pandas_ta as ta
 import requests
 import yfinance as yf
 from indicators import atr, rsi, supertrend
-from get_option_data import get_call_put_oi_diff_oi_tracker, get_call_put_oi_diff, get_call_put_oi_diff_old
 from oi_scraper import get_web_driver, get_oi_data, close_driver
 from order_placement import (cancel_order, clear_cache, get_instrument_list,
                              get_order_status, robo_order, sell_order_market)
@@ -58,7 +57,9 @@ present_day = (dt.now(timezone(time_zone)).today())
 
 # region order placement vars
 
-weekly_expiry = "NIFTY17MAR22"
+weekly_expiry = "NIFTY24MAR22"
+margin_strike_price_units = 150
+
 instrument_list = None
 call_signal = False
 put_signal = False
@@ -88,8 +89,8 @@ logger = None
 symbol = "^NSEI"
 # symbol = "^DJUSBK"
 
-params = (10, 1, 10, 2, 10, 3, 5, 95, 0.05, 55, 75,
-          10, 1.35, 5, 2, '2022-03-07', 0.35, 12)
+params = (7, 1, 8, 2, 9, 3, 5, 95, 0.05, 200, 50,
+          10, 1.35, 5, 2, '2022-03-08', 1, 12)
 
 
 st1_length = params[0]
@@ -112,7 +113,6 @@ margin_factor = params[16]
 bb_length = params[17]
 
 
-margin_strike_price_units = 0
 val_index = -1
 max_loss_units = 20
 min_target_units = 5
@@ -199,7 +199,7 @@ def download_data():
 def is_trading_time(timing):
     global call_signal, put_signal
 
-    is_closing_time = dtm(timing.hour, timing.minute) > dtm(14, 30)
+    is_closing_time = dtm(timing.hour, timing.minute) > dtm(20, 30)
     is_opening_time = dtm(timing.hour, timing.minute) < dtm(9, 40)
 
     if is_opening_time or is_closing_time:
@@ -224,7 +224,7 @@ def is_trading_time(timing):
 def verify_oi_diff(order_type):
     diff_dict = get_oi_data()
 
-    call_oi, put_oi = abs(diff_dict['call_oi']), abs(diff_dict['put_oi'])
+    call_oi, put_oi = diff_dict['call_oi'], diff_dict['put_oi']
     oi_diff = abs(call_oi - put_oi)
 
     logger.info(
@@ -291,7 +291,6 @@ def put_strategy(super_trend_arr, super_trend_arr_old, timing, close_val, open_v
 
 def call_strategy(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val, high_val, low_val, ema_val, bb_width, atr_val, prev_close_val, prev_open_val):
     global call_signal
-
     if (
         call_signal == False
         and put_signal == False

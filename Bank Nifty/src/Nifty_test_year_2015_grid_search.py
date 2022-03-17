@@ -143,7 +143,7 @@ def alert(arr, timing, close_val, open_val, high_val, low_val, rsi_val, ema_val,
                 update_signal_result(low_val, True, timing=timing)
 
     is_closing_time = time(timing.hour, timing.minute) > time(14, 30)
-    is_opening_time = time(timing.hour, timing.minute) < time(9, 30)
+    is_opening_time = time(timing.hour, timing.minute) < time(9, 40)
 
     if is_opening_time or is_closing_time:
         set_out_of_trade_vals(timing, high_val, low_val)
@@ -181,7 +181,7 @@ def verify_oi_diff(order_type, timing):
 
     diff_dict = get_call_put_oi_diff_test(timing)
 
-    call_oi, put_oi = abs(diff_dict['call_oi']), abs(diff_dict['put_oi'])
+    call_oi, put_oi = diff_dict['call_oi'], diff_dict['put_oi']
     oi_diff = abs(call_oi - put_oi)
 
     if oi_diff >= min_oi_diff:
@@ -196,16 +196,16 @@ def signal_strategy(arr, timing, close_val, open_val, rsi_val,  high_val, low_va
     global call_signal, put_signal, call_strike_price, put_strike_price, signal_end_time, stoploss, margin
 
     if (
-        call_signal == False
-        and put_signal == False
-        and bb_width >= bb_width_min
-        and arr.all()
-        and close_val > open_val
-        and rsi_val < rsi_upper_limit
-        and open_val > ema_val
-        and verify_oi_diff('CE', timing)
-        # and open_val > prev_close
-        # and open_val > prev_open
+            call_signal == False
+            and put_signal == False
+            and bb_width >= bb_width_min
+            and arr.all()
+            and close_val > open_val
+            and rsi_val < rsi_upper_limit
+            and open_val > ema_val
+            and verify_oi_diff('CE', timing)
+            # and open_val > prev_close
+            # and open_val > prev_open
     ):
         call_signal = True
 
@@ -223,16 +223,16 @@ def signal_strategy(arr, timing, close_val, open_val, rsi_val,  high_val, low_va
         update_signal_vals(timing, "CALL", high_val, stoploss, margin)
 
     if (
-        call_signal == False
-        and put_signal == False
-        and bb_width >= bb_width_min
-        and not any(arr)
-        and close_val < open_val
-        and rsi_val > rsi_lower_limit
-        and open_val < ema_val
-        and verify_oi_diff('PE', timing)
-        # and open_val < prev_close
-        # and open_val < prev_open
+            call_signal == False
+            and put_signal == False
+            and bb_width >= bb_width_min
+            and not any(arr)
+            and close_val < open_val
+            and rsi_val > rsi_lower_limit
+            and open_val < ema_val
+            and verify_oi_diff('PE', timing)
+            # and open_val < prev_close
+            # and open_val < prev_open
     ):
         put_signal = True
 
@@ -265,18 +265,18 @@ def signal_strategy(arr, timing, close_val, open_val, rsi_val,  high_val, low_va
 
 
 def update_open_interest_data():
-    df = pd.read_excel(r'D:\Options\Bank Nifty\test data\Open_Interest.xlsx')
-    file_path = r'D:\Options\Bank Nifty\test data\Open_Interest.txt'
+    df = pd.read_excel(r'Bank Nifty\test data\Open_Interest.xlsx')
+    file_path = r'Bank Nifty\test data\Open_Interest.txt'
+
+    if os.path.exists(file_path) and (os.stat(file_path).st_size == 0):
+        print("Copy historical OI data from network tab of https://tradingtick.com/options/callvsput and paste it in Open_Interest.txt file")
 
     with open(file_path, "r") as file:
         for res in file.readlines():
-            if res is None:
-                print("Copy historical OI data from network tab of https://tradingtick.com/options/callvsput and paste it in Open_Interest.txt file")
-            else:
-                res = eval(res)
-                df = df.append(res, ignore_index=True)
+            res = eval(res)
+            df = df.append(res, ignore_index=True)
 
-    df.to_excel(r'D:\Options\Bank Nifty\test data\Open_Interest.xlsx',
+    df.to_excel(r'Bank Nifty\test data\Open_Interest.xlsx',
                 index=False)
 
 
@@ -287,6 +287,7 @@ def download_data(business_day=None):
     df = df.set_index('Datetime')
     df.index = pd.to_datetime(df.index)
 
+    # update_open_interest_data()
     # weekly_business_day = (dt.now() - BDay(7)).strftime("%Y-%m-%d")
     # df = yf.download(symbol, start=weekly_business_day,
     #                  period="1d", interval="2m")
@@ -439,10 +440,9 @@ def update_test_data(df=None):
 def unit_test():
     weekly_business_day = (dt.now() - BDay(7)).strftime("%Y-%m-%d")
 
-    params = (10, 1, 10, 2, 10, 3, 5, 95, 0.05, 55, 75,
-              10, 1.35, 5, 2, '2022-03-07', 0.7, 12)
+    params = (7, 1, 8, 2, 9, 3, 5, 95, 0.05, 200, 50,
+              10, 1.35, 5, 2, '2022-03-08', 1, 12)
 
-    update_open_interest_data()
     return test_code(params)
 
 # endregion
@@ -526,6 +526,6 @@ def grid_search_code(time_zone):
 
 if __name__ == '__main__':
 
-    grid_search_code(time_zone)
+    # grid_search_code(time_zone)
 
-    # acc, pts, rev = unit_test()
+    acc, pts, rev = unit_test()
