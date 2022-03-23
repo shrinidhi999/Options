@@ -84,7 +84,7 @@ st2_factor = 2
 st3_length = 10
 st3_factor = 3
 
-max_loss_units = 20
+max_loss_units = 40
 min_target_units = 5
 # endregion
 
@@ -104,7 +104,7 @@ def update_signal_vals(sig_time, sig_type, sig_price, stoploss=0, margin_val=0):
 def update_signal_result(val, is_correct, diff_in_pts=None, timing=None):
     global signal_result_price, signal_is_correct, signal_loss, signal_profit, loss_day, call_signal, put_signal
 
-    # Keeping this code commented as sometimes option price may not move as quickly as market price.
+    # Keeping this code commented as we are not tracking the order status yet.
     # call_signal = False
     # put_signal = False
     # signal_end_time.append(timing.strftime("%d-%m-%Y %H:%M"))
@@ -143,7 +143,7 @@ def alert(arr, timing, close_val, open_val, high_val, low_val, rsi_val, ema_val,
                 update_signal_result(low_val, True, timing=timing)
 
     is_closing_time = time(timing.hour, timing.minute) > time(14, 30)
-    is_opening_time = time(timing.hour, timing.minute) < time(9, 40)
+    is_opening_time = time(timing.hour, timing.minute) < time(9, 30)
 
     if is_opening_time or is_closing_time:
         set_out_of_trade_vals(timing, high_val, low_val)
@@ -196,16 +196,16 @@ def signal_strategy(arr, timing, close_val, open_val, rsi_val,  high_val, low_va
     global call_signal, put_signal, call_strike_price, put_strike_price, signal_end_time, stoploss, margin
 
     if (
-            call_signal == False
-            and put_signal == False
-            and bb_width >= bb_width_min
-            and arr.all()
-            and close_val > open_val
-            and rsi_val < rsi_upper_limit
-            and open_val > ema_val
-            and verify_oi_diff('CE', timing)
-            # and open_val > prev_close
-            # and open_val > prev_open
+        call_signal == False
+        and put_signal == False
+        and bb_width >= bb_width_min
+        and arr.all()
+        and close_val > open_val
+        and rsi_val < rsi_upper_limit
+        and open_val > ema_val
+        and verify_oi_diff('CE', timing)
+        # and open_val > prev_close
+        # and open_val > prev_open
     ):
         call_signal = True
 
@@ -223,16 +223,16 @@ def signal_strategy(arr, timing, close_val, open_val, rsi_val,  high_val, low_va
         update_signal_vals(timing, "CALL", high_val, stoploss, margin)
 
     if (
-            call_signal == False
-            and put_signal == False
-            and bb_width >= bb_width_min
-            and not any(arr)
-            and close_val < open_val
-            and rsi_val > rsi_lower_limit
-            and open_val < ema_val
-            and verify_oi_diff('PE', timing)
-            # and open_val < prev_close
-            # and open_val < prev_open
+        call_signal == False
+        and put_signal == False
+        and bb_width >= bb_width_min
+        and not any(arr)
+        and close_val < open_val
+        and rsi_val > rsi_lower_limit
+        and open_val < ema_val
+        and verify_oi_diff('PE', timing)
+        # and open_val < prev_close
+        # and open_val < prev_open
     ):
         put_signal = True
 
@@ -340,7 +340,7 @@ def get_results(business_day=None):
 
 
 def test_code(params):
-    global st1_length, st1_factor, st2_length, st2_factor, st3_length, st3_factor, rsi_period, rsi_upper_limit, rsi_lower_limit, ema_length, bb_width_min, call_signal, put_signal, call_strike_price, put_strike_price, signal_start_time, signal_end_time, signal_type, signal_strike_price, signal_result_price, signal_is_correct, margin, stoploss_factor, signal_loss, signal_profit, atr_period, interval, today, signal_stoploss, margin_factor, signal_margin, bb_length
+    global st1_length, st1_factor, st2_length, st2_factor, st3_length, st3_factor, rsi_period, rsi_upper_limit, rsi_lower_limit, ema_length, bb_width_min, call_signal, put_signal, call_strike_price, put_strike_price, signal_start_time, signal_end_time, signal_type, signal_strike_price, signal_result_price, signal_is_correct, margin, stoploss_factor, signal_loss, signal_profit, atr_period, interval, today, signal_stoploss, margin_factor, signal_margin, bb_length, min_oi_diff, max_loss_units
 
     st1_length = params[0]
     st1_factor = params[1]
@@ -360,6 +360,8 @@ def test_code(params):
     business_day = params[15]
     margin_factor = params[16]
     bb_length = params[17]
+    min_oi_diff = params[18]
+    max_loss_units = params[19]
 
     call_signal = False
     put_signal = False
@@ -440,8 +442,7 @@ def update_test_data(df=None):
 def unit_test():
     weekly_business_day = (dt.now() - BDay(7)).strftime("%Y-%m-%d")
 
-    params = (7, 1, 8, 2, 9, 3, 5, 95, 0.05, 200, 50,
-              10, 1.35, 5, 2, '2022-03-08', 1, 12)
+    params = (10, 1, 10, 2.4, 10, 3, 5, 95, 0.05, 55, 75, 10, 1.5, 2, 2, '2022-03-15', 0.7, 12, 750000, 35)
 
     return test_code(params)
 
@@ -458,33 +459,33 @@ def grid_search_code(time_zone):
     results = []
     cnt = 0
 
-    # update_test_data()
-
     # last 7th business day
     weekly_business_day = (dt.now() - BDay(7)).strftime("%Y-%m-%d")
 
     # initialize lists
-    st1_length_list = [7, 10]
+    st1_length_list = [10]
     st1_factor_list = [1, 1.2]
-    st2_length_list = [8, 10]
+    st2_length_list = [10]
     st2_factor_list = [2, 2.4]
-    st3_length_list = [9, 10]
+    st3_length_list = [10]
     st3_factor_list = [3, 3.6]
     rsi_period_list = [5]
     rsi_upper_limit_list = [95]
     rsi_lower_limit_list = [0.05]
-    ema_length_list = [55, 100, 200]
-    bb_width = [50, 75, 100]
+    ema_length_list = [55, 200]
+    bb_width = [50, 75]
     margin = [10]
-    stoploss_factor = [1.35, 1.5]
-    atr_period = [5]
+    stoploss_factor = [1.5, 2]
+    atr_period = [2, 5]
     interval = [2]
     business_day = [weekly_business_day]
     margin_factor = [0.7, 1]
     bb_length = [12]
+    oi_diff = [750_000, 3_000_000]
+    max_loss_units = [35, 40]
 
     final = [st1_length_list, st1_factor_list, st2_length_list, st2_factor_list, st3_length_list,
-             st3_factor_list, rsi_period_list, rsi_upper_limit_list, rsi_lower_limit_list, ema_length_list, bb_width, margin, stoploss_factor, atr_period, interval, business_day, margin_factor, bb_length]
+             st3_factor_list, rsi_period_list, rsi_upper_limit_list, rsi_lower_limit_list, ema_length_list, bb_width, margin, stoploss_factor, atr_period, interval, business_day, margin_factor, bb_length, oi_diff, max_loss_units]
     res_combos = list(itertools.product(*final))
 
     with Pool(multiprocessing.cpu_count()) as p:
@@ -513,10 +514,17 @@ def grid_search_code(time_zone):
     print(f"Max Accuracy: {max(accs)}")
     print("--------------------------------------------")
     print(f"Max Profit: {max(revs)}")
-    print(
-        f"Acuuracy for Max Profit combination: {accs[revs.index(max(revs))]}")
+    # print(
+    #     f"Accuracy for Max Profit combination: {accs[revs.index(max(revs))]}")
     print(f"Max Profit combination: {res_combos[revs.index(max(revs))]}")
 
+    # print("Combinations with max profit:")
+    # for i in range(len(revs)):
+    #     if revs[i] == max(revs):
+    #         print(res_combos[i])
+    #         print(f"Revenue: {revs[i]}")
+    #         print(f"Accuracy: {accs[i]}")
+    #         print("-------------------")
     # print(accs)
     # print(revs)
     # print(pts_list)

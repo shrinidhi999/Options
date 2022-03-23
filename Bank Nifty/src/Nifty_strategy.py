@@ -48,17 +48,11 @@ warnings.filterwarnings("ignore")
 time_zone = "Asia/Kolkata"
 time_format = "%d-%m-%Y %H:%M"
 
-# interval = 5
 present_day = (dt.now(timezone(time_zone)).today())
-# last_business_day = (dt.today() - BDay(7)).strftime("%Y-%m-%d")
-
 
 # endregion
 
 # region order placement vars
-
-weekly_expiry = "NIFTY24MAR22"
-margin_strike_price_units = 150
 
 instrument_list = None
 call_signal = False
@@ -71,7 +65,6 @@ buy_order_id = None
 call_strike_price = 0
 put_strike_price = 0
 stoploss = 0
-min_oi_diff = 5_500_000
 # endregion
 
 # region notification and log vars
@@ -89,8 +82,11 @@ logger = None
 symbol = "^NSEI"
 # symbol = "^DJUSBK"
 
-params = (7, 1, 8, 2, 9, 3, 5, 95, 0.05, 200, 50,
-          10, 1.35, 5, 2, '2022-03-08', 1, 12)
+weekly_expiry = "NIFTY24MAR22"
+margin_strike_price_units = 0
+
+params = (10, 1, 10, 2.4, 10, 3, 5, 95, 0.05, 55, 75, 10,
+          1.5, 2, 2, '2022-03-15', 0.7, 12, 750000, 35)
 
 
 st1_length = params[0]
@@ -111,10 +107,10 @@ interval = params[14]
 last_business_day = params[15]  # "2022-02-15"
 margin_factor = params[16]
 bb_length = params[17]
-
+min_oi_diff = params[18]
+max_loss_units = params[19]
 
 val_index = -1
-max_loss_units = 20
 min_target_units = 5
 
 # endregion
@@ -199,12 +195,12 @@ def download_data():
 def is_trading_time(timing):
     global call_signal, put_signal
 
-    is_closing_time = dtm(timing.hour, timing.minute) > dtm(20, 30)
-    is_opening_time = dtm(timing.hour, timing.minute) < dtm(9, 40)
+    is_closing_time = dtm(timing.hour, timing.minute) > dtm(14, 30)
+    is_opening_time = dtm(timing.hour, timing.minute) < dtm(9, 30)
 
     if is_opening_time or is_closing_time:
         clear_cache()
-        close_driver()
+        # close_driver()
 
         if call_signal:
             call_signal = False
@@ -230,11 +226,14 @@ def verify_oi_diff(order_type):
     logger.info(
         f"OI Change: Order Type : {order_type},  OI diff: {oi_diff}, Call OI: {call_oi}, Put OI: {put_oi}")
 
-    if oi_diff >= min_oi_diff:
-        if (order_type == 'CE') and (call_oi < put_oi):
+    if call_signal or put_signal:
+        if 0 in (oi_diff, call_oi, put_oi):
             return True
-        elif (order_type == 'PE') and (call_oi > put_oi):
+
+    elif oi_diff >= min_oi_diff:
+        if ((order_type == 'CE') and (call_oi < put_oi)) or ((order_type == 'PE') and (call_oi > put_oi)):
             return True
+
     return False
 
 
@@ -526,7 +525,7 @@ def initial_set_up():
 
     if instrument_list:
         log_notification(
-            True, msg="Instrument list downloaded and chrome driver for OI ready")
+            True, msg=f"Instrument list downloaded and OI data check:{get_oi_data()}")
 
     else:
         log_notification(True, msg="Instrument list download failed")
