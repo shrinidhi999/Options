@@ -24,7 +24,7 @@ import pandas_ta as ta
 import requests
 import yfinance as yf
 from indicators import atr, rsi, supertrend
-from get_option_data import get_call_put_oi_diff_test
+from get_option_data import get_call_put_oi_diff_test, clear_cache
 from pandas.tseries.offsets import BDay
 from pytz import timezone
 from tqdm import tqdm
@@ -143,7 +143,7 @@ def alert(arr, timing, close_val, open_val, high_val, low_val, rsi_val, ema_val,
                 update_signal_result(low_val, True, timing=timing)
 
     is_closing_time = time(timing.hour, timing.minute) > time(14, 30)
-    is_opening_time = time(timing.hour, timing.minute) < time(9, 30)
+    is_opening_time = time(timing.hour, timing.minute) < time(10, 00)
 
     if is_opening_time or is_closing_time:
         set_out_of_trade_vals(timing, high_val, low_val)
@@ -215,11 +215,7 @@ def signal_strategy(arr, timing, close_val, open_val, rsi_val,  high_val, low_va
         margin = atr_val * margin_factor
         margin = min_target_units if math.isnan(margin) else margin
 
-        # stoploss = stoploss_factor
-        # print(f"stoploss: {stoploss}")
         call_strike_price = high_val
-        price = int(math.ceil(high_val / 100.0)) * 100
-        price += 100
         update_signal_vals(timing, "CALL", high_val, stoploss, margin)
 
     if (
@@ -242,11 +238,7 @@ def signal_strategy(arr, timing, close_val, open_val, rsi_val,  high_val, low_va
         margin = atr_val * margin_factor
         margin = min_target_units if math.isnan(margin) else margin
 
-        # stoploss = stoploss_factor
-        # print(f"stoploss: {stoploss}")
         put_strike_price = low_val
-        price = int(math.floor(low_val / 100.0)) * 100
-        price -= 100
         update_signal_vals(timing, "PUT", low_val, stoploss, margin)
 
     if call_signal and ((arr[0] == False) and (verify_oi_diff('CE', timing) == False)):
@@ -279,6 +271,16 @@ def update_open_interest_data():
     df.to_excel(r'Bank Nifty\test data\Open_Interest.xlsx',
                 index=False)
 
+    clear_cache()
+
+
+def update_market_data():
+    weekly_business_day = (dt.now() - BDay(7)).strftime("%Y-%m-%d")
+    df = yf.download(symbol, start=weekly_business_day,
+                     period="1d", interval="2m")
+    df.to_csv(os.getcwd() + r'\Bank Nifty\test data\NIFTY Data_2Min.csv')
+    return df
+
 
 def download_data(business_day=None):
 
@@ -288,15 +290,10 @@ def download_data(business_day=None):
     df.index = pd.to_datetime(df.index)
 
     # update_open_interest_data()
-    # weekly_business_day = (dt.now() - BDay(7)).strftime("%Y-%m-%d")
-    # df = yf.download(symbol, start=weekly_business_day,
-    #                  period="1d", interval="2m")
-    # df.to_csv(os.getcwd() + r'\Bank Nifty\test data\NIFTY Data_2Min.csv')
+    # df = update_market_data()
 
     if business_day:
         df = df[df.index >= business_day]
-        # df = df[df.index >= '2021-12-07']
-        # df = df[df.index <= '2021-12-16']
     else:
         df = df[df.index.year >= test_start_year]
 
@@ -378,7 +375,6 @@ def test_code(params):
     signal_profit = []
     signal_stoploss = []
     signal_margin = []
-    # todo remove
 
     df = download_data(business_day)
 
@@ -442,7 +438,8 @@ def update_test_data(df=None):
 def unit_test():
     weekly_business_day = (dt.now() - BDay(7)).strftime("%Y-%m-%d")
 
-    params = (10, 1, 10, 2.4, 10, 3, 5, 95, 0.05, 55, 75, 10, 1.5, 2, 2, '2022-03-15', 0.7, 12, 750000, 35)
+    params = (10, 1.2, 10, 2.4, 10, 3.6, 2, 95, 0.05, 200, 75,
+              10, 2, 2, 2, '2022-03-16', 1, 12, 3000000, 35)
 
     return test_code(params)
 
@@ -464,25 +461,25 @@ def grid_search_code(time_zone):
 
     # initialize lists
     st1_length_list = [10]
-    st1_factor_list = [1, 1.2]
+    st1_factor_list = [1.2]
     st2_length_list = [10]
-    st2_factor_list = [2, 2.4]
+    st2_factor_list = [2.4]
     st3_length_list = [10]
-    st3_factor_list = [3, 3.6]
-    rsi_period_list = [5]
+    st3_factor_list = [3.6]
+    rsi_period_list = [2, 5]
     rsi_upper_limit_list = [95]
     rsi_lower_limit_list = [0.05]
-    ema_length_list = [55, 200]
-    bb_width = [50, 75]
+    ema_length_list = [55, 100, 200]
+    bb_width = [50, 75, 100]
     margin = [10]
     stoploss_factor = [1.5, 2]
     atr_period = [2, 5]
     interval = [2]
     business_day = [weekly_business_day]
-    margin_factor = [0.7, 1]
+    margin_factor = [1, 1.25]
     bb_length = [12]
-    oi_diff = [750_000, 3_000_000]
-    max_loss_units = [35, 40]
+    oi_diff = [3_000_000]
+    max_loss_units = [35]
 
     final = [st1_length_list, st1_factor_list, st2_length_list, st2_factor_list, st3_length_list,
              st3_factor_list, rsi_period_list, rsi_upper_limit_list, rsi_lower_limit_list, ema_length_list, bb_width, margin, stoploss_factor, atr_period, interval, business_day, margin_factor, bb_length, oi_diff, max_loss_units]
@@ -514,8 +511,8 @@ def grid_search_code(time_zone):
     print(f"Max Accuracy: {max(accs)}")
     print("--------------------------------------------")
     print(f"Max Profit: {max(revs)}")
-    # print(
-    #     f"Accuracy for Max Profit combination: {accs[revs.index(max(revs))]}")
+    print(
+        f"Accuracy for Max Profit combination: {accs[revs.index(max(revs))]}")
     print(f"Max Profit combination: {res_combos[revs.index(max(revs))]}")
 
     # print("Combinations with max profit:")
@@ -534,6 +531,6 @@ def grid_search_code(time_zone):
 
 if __name__ == '__main__':
 
-    # grid_search_code(time_zone)
+    grid_search_code(time_zone)
 
-    acc, pts, rev = unit_test()
+    # acc, pts, rev = unit_test()

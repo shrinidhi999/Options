@@ -30,7 +30,7 @@ import pandas_ta as ta
 import requests
 import yfinance as yf
 from indicators import atr, rsi, supertrend
-from oi_scraper import get_web_driver, get_oi_data, close_driver
+from oi_scraper import get_web_driver, get_oi_data
 from order_placement import (cancel_order, clear_cache, get_instrument_list,
                              get_order_status, robo_order, sell_order_market)
 from pandas.tseries.offsets import BDay
@@ -82,12 +82,11 @@ logger = None
 symbol = "^NSEI"
 # symbol = "^DJUSBK"
 
-weekly_expiry = "NIFTY24MAR22"
-margin_strike_price_units = 0
+weekly_expiry = "NIFTY31MAR22"
+margin_strike_price_units = 50
 
-params = (10, 1, 10, 2.4, 10, 3, 5, 95, 0.05, 55, 75, 10,
-          1.5, 2, 2, '2022-03-15', 0.7, 12, 750000, 35)
-
+params = (10, 1.2, 10, 2.4, 10, 3.6, 2, 95, 0.05, 200, 75,
+          10, 2, 2, 2, '2022-03-16', 1, 12, 3000000, 35)
 
 st1_length = params[0]
 st1_factor = params[1]
@@ -196,7 +195,7 @@ def is_trading_time(timing):
     global call_signal, put_signal
 
     is_closing_time = dtm(timing.hour, timing.minute) > dtm(14, 30)
-    is_opening_time = dtm(timing.hour, timing.minute) < dtm(9, 30)
+    is_opening_time = dtm(timing.hour, timing.minute) < dtm(10, 00)
 
     if is_opening_time or is_closing_time:
         clear_cache()
@@ -226,14 +225,19 @@ def verify_oi_diff(order_type):
     logger.info(
         f"OI Change: Order Type : {order_type},  OI diff: {oi_diff}, Call OI: {call_oi}, Put OI: {put_oi}")
 
-    if call_signal or put_signal:
+    if oi_diff >= min_oi_diff and (
+        ((order_type == 'CE') and (call_oi < put_oi))
+        or ((order_type == 'PE') and (call_oi > put_oi))
+    ):
+        logger.info("OI Result:True1")
+        return True
+
+    elif call_signal or put_signal:
         if 0 in (oi_diff, call_oi, put_oi):
+            logger.info("OI Result:True2")
             return True
 
-    elif oi_diff >= min_oi_diff:
-        if ((order_type == 'CE') and (call_oi < put_oi)) or ((order_type == 'PE') and (call_oi > put_oi)):
-            return True
-
+    logger.info("OI Result:False")
     return False
 
 

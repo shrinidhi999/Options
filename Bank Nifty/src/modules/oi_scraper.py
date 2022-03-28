@@ -1,18 +1,25 @@
 import time
 from lib2to3.pgen2 import driver
 
-from bs4 import BeautifulSoup
 from selenium import webdriver
-from selenium.webdriver.common.keys import Keys
 
 driver = None
+driver_location = r"C:\chromedriver_win32\chromedriver"
+url = "https://tradingtick.com/options/callvsput"
 
 
 def get_web_driver():
+    '''
+    Link to fix sign in : https://www.youtube.com/watch?v=FVumnHy5Tzo&ab_channel=HelloWorld
+    cmd prompt: 
+    cd C:\Program Files (x86)\Google\Chrome\Application
+    chrome.exe --remote-debugging-port=9222 --user-data-dir="C:\chromedriver_win32\localhost"
+    '''
     global driver
 
-    url = "https://tradingtick.com/options/callvsput"
-    driver = webdriver.Chrome(r'C:\chromedriver_win32\chromedriver')
+    options = webdriver.ChromeOptions()
+    options.add_experimental_option("debuggerAddress", "localhost:9222")
+    driver = webdriver.Chrome(driver_location, options=options)
     driver.get(url)
 
 
@@ -21,15 +28,14 @@ def get_oi_data():
 
     try:
         driver.refresh()
-        html = driver.page_source
+        time.sleep(1)
+        # html = driver.page_source
+        call_val = driver.find_element_by_id(
+            "SvgjsPath1270").get_attribute('val')
+        put_val = driver.find_element_by_id(
+            "SvgjsPath1272").get_attribute('val')
 
-        soup = BeautifulSoup(html, "html.parser")
-
-        oi_divs = soup.find(
-            'g', {'class': 'apexcharts-bar-series apexcharts-plot-series'})
-        paths = oi_divs.find_all('path')
-
-        return {'call_oi': int(paths[0].get('val')), 'put_oi': int(paths[1].get('val'))}
+        return {'call_oi': int(call_val), 'put_oi': int(put_val)}
 
     except Exception as e:
         print(f"Get OI data failed: {e}")
@@ -43,4 +49,4 @@ def close_driver():
 if __name__ == '__main__':
     get_web_driver()
     print(get_oi_data())
-    close_driver()
+    # close_driver()
