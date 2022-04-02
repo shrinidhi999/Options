@@ -107,7 +107,8 @@ def update_signal_result(val, is_correct, diff_in_pts=None, timing=None):
     # Keeping this code commented as we are not tracking the order status yet.
     # call_signal = False
     # put_signal = False
-    # signal_end_time.append(timing.strftime("%d-%m-%Y %H:%M"))
+    if len(signal_start_time) > len(signal_end_time):
+        signal_end_time.append(timing.strftime("%d-%m-%Y %H:%M"))
 
     signal_result_price.append(val)
     signal_is_correct.append(is_correct)
@@ -163,14 +164,18 @@ def set_out_of_trade_vals(timing, high_val, low_val):
 
     if call_signal:
         call_signal = False
-        signal_end_time.append(timing.strftime("%d-%m-%Y %H:%M"))
+
+        if len(signal_start_time) > len(signal_end_time):
+            signal_end_time.append(timing.strftime("%d-%m-%Y %H:%M"))
         if len(signal_strike_price) > len(signal_result_price):
             update_signal_result(
                 low_val, False, call_strike_price - low_val, timing=timing)
 
     elif put_signal:
         put_signal = False
-        signal_end_time.append(timing.strftime("%d-%m-%Y %H:%M"))
+
+        if len(signal_start_time) > len(signal_end_time):
+            signal_end_time.append(timing.strftime("%d-%m-%Y %H:%M"))
         if len(signal_strike_price) > len(signal_result_price):
             update_signal_result(high_val, False, high_val -
                                  put_strike_price, timing=timing)
@@ -243,14 +248,20 @@ def signal_strategy(arr, timing, close_val, open_val, rsi_val,  high_val, low_va
 
     if call_signal and ((arr[0] == False) and (verify_oi_diff('CE', timing) == False)):
         call_signal = False
-        signal_end_time.append(timing)
+
+        if len(signal_start_time) > len(signal_end_time):
+            signal_end_time.append(timing)
+
         if len(signal_strike_price) > len(signal_result_price):
             update_signal_result(
                 low_val, False, call_strike_price - low_val, timing=timing)
 
     if put_signal and ((arr[0] == True) and (verify_oi_diff('PE', timing) == False)):
         put_signal = False
-        signal_end_time.append(timing)
+
+        if len(signal_start_time) > len(signal_end_time):
+            signal_end_time.append(timing)
+
         if len(signal_strike_price) > len(signal_result_price):
             update_signal_result(high_val, False, high_val -
                                  put_strike_price, timing=timing)
@@ -263,13 +274,16 @@ def update_open_interest_data():
     if os.path.exists(file_path) and (os.stat(file_path).st_size == 0):
         print("Copy historical OI data from network tab of https://tradingtick.com/options/callvsput and paste it in Open_Interest.txt file")
 
-    with open(file_path, "r") as file:
-        for res in file.readlines():
-            res = eval(res)
-            df = df.append(res, ignore_index=True)
+    else:
+        with open(file_path, "r+") as file:
+            for res in file.readlines():
+                res = eval(res)
+                df = df.append(res, ignore_index=True)
 
-    df.to_excel(r'Bank Nifty\test data\Open_Interest.xlsx',
-                index=False)
+            file.truncate(0)
+
+        df.to_excel(r'Bank Nifty\test data\Open_Interest.xlsx',
+                    index=False)
 
     clear_cache()
 
@@ -318,12 +332,15 @@ def get_results(business_day=None):
         }
     )
 
+    # Export test results
+    # df_test_result.to_csv(
+    #     os.getcwd() + r'\Bank Nifty\test data\NIFTY_Test_Result.csv', index=False)
+
     accuracy = 0
     if len(signal_is_correct) > 0:
         accuracy = round(
             (sum(signal_is_correct) / len(signal_is_correct) * 100), 2)
     print("Sample Result:")
-    results = df_test_result[df_test_result['Is Signal Correct'] == False]
     print(df_test_result.tail(30))
 
     date_msg = f"Start Date: {business_day}" if business_day else f"Start year: {test_start_year}"
@@ -412,34 +429,11 @@ def test_code(params):
     return get_results(business_day)
 
 
-def update_test_data(df=None):
-    input = (dt.now(timezone("Asia/Kolkata")).today() -
-             timedelta(days=59)).strftime("%Y-%m-%d")
-
-    if not df:
-        df = yf.download(symbol, start=input,
-                         period="1d", interval=str(interval) + "m")
-
-    df_test_data = pd.read_csv(
-        os.getcwd() + r'\Bank Nifty\test data\NIFTY BANK Data.csv')
-
-    df['Datetime'] = df.index
-    df.reset_index(drop=True, inplace=True)
-
-    df_latest = df[df.Datetime > pd.Timestamp(
-        df_test_data.Datetime.iloc[-1])]
-    df_test_data = df_test_data.append(df_latest)
-    df_test_data = df_test_data[['Datetime', 'Open',
-                                 'High', 'Low',	'Close', 'Adj Close', 'Volume']]
-    df_test_data.to_csv(os.getcwd() +
-                        r'\Bank Nifty\test data\NIFTY BANK Data.csv', index=False)
-
-
 def unit_test():
     weekly_business_day = (dt.now() - BDay(7)).strftime("%Y-%m-%d")
 
-    params = (10, 1.2, 10, 2.4, 10, 3.6, 2, 95, 0.05, 200, 75,
-              10, 2, 2, 2, '2022-03-16', 1, 12, 3000000, 35)
+    params = (10, 1.2, 10, 2.4, 10, 3.6, 2, 95, 0.05, 55, 75,
+              10, 2, 2, 2, '2022-03-22', 1.25, 12, 3000000, 35)
 
     return test_code(params)
 

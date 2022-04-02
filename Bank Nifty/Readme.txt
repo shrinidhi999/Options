@@ -20,9 +20,9 @@ Run: Nifty_strategy.py
 
 Run: Nifty_grid_search.py
 1. In Open_Interest.txt, add today's OI values copied from tradingtick website.
-2. Uncomment the update_open_interest_data() and df = update_market_data().
+2. Run Clear cache method from get_option_data.py file. Uncomment the update_open_interest_data() and df = update_market_data().
 3. Run unit_test() first. It will download the latest data and update the OI and corresponding cache.
-4. Now comment the unit_test() and run the grid_search_code(time_zone).
+4. Now comment the unit_test() method and the lines update_open_interest_data() and df = update_market_data(). Run the grid_search_code(time_zone).
 5. It will give the optimized set of params for the next day.
 6. Copy the optimized params to Nifty_strategy.py
 

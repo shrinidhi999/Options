@@ -59,7 +59,7 @@ call_signal = False
 put_signal = False
 trading_symbol = None
 option_token = None
-quantity = 50
+
 buy_order_id = None
 
 call_strike_price = 0
@@ -82,11 +82,12 @@ logger = None
 symbol = "^NSEI"
 # symbol = "^DJUSBK"
 
-weekly_expiry = "NIFTY31MAR22"
-margin_strike_price_units = 50
+weekly_expiry = "NIFTY07APR22"
+margin_strike_price_units = 0
+quantity = 100
 
-params = (10, 1.2, 10, 2.4, 10, 3.6, 2, 95, 0.05, 200, 75,
-          10, 2, 2, 2, '2022-03-16', 1, 12, 3000000, 35)
+params = (10, 1.2, 10, 2.4, 10, 3.6, 2, 95, 0.05, 55, 75,
+          10, 2, 2, 2, '2022-03-23', 1.25, 12, 3000000, 35)
 
 st1_length = params[0]
 st1_factor = params[1]
