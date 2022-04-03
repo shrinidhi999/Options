@@ -67,7 +67,8 @@ loss_day = None
 
 test_start_year = 2019  # data available from 2015
 
-ema_length = 9
+first_ema_length = 9
+second_ema_length = 9
 rsi_period = 5
 rsi_upper_limit = 95
 rsi_lower_limit = 0.05
@@ -127,7 +128,7 @@ def update_signal_result(val, is_correct, diff_in_pts=None, timing=None):
             signal_loss.append(50 * stoploss)
 
 
-def alert(arr, timing, close_val, open_val, high_val, low_val, rsi_val, ema_val, bb_width, atr_val, prev_close, prev_open):
+def alert(arr, timing, close_val, open_val, high_val, low_val, rsi_val, first_ema_val, bb_width, atr_val, prev_close, prev_open, sec_ema_val):
     global call_signal, put_signal, call_strike_price, put_strike_price, signal_end_time
 
     if len(signal_strike_price) > len(signal_result_price):
@@ -158,7 +159,7 @@ def alert(arr, timing, close_val, open_val, high_val, low_val, rsi_val, ema_val,
     timing = timing.strftime("%d-%m-%Y %H:%M")
 
     signal_strategy(arr, timing, close_val, open_val,
-                    rsi_val, high_val, low_val, ema_val, bb_width, atr_val, prev_close, prev_open)
+                    rsi_val, high_val, low_val, first_ema_val, bb_width, atr_val, prev_close, prev_open, sec_ema_val)
 
 
 def set_out_of_trade_vals(timing, high_val, low_val):
@@ -199,20 +200,18 @@ def verify_oi_diff(order_type, timing):
     return False
 
 
-def signal_strategy(arr, timing, close_val, open_val, rsi_val,  high_val, low_val, ema_val, bb_width, atr_val, prev_close, prev_open):
+def signal_strategy(arr, timing, close_val, open_val, rsi_val, high_val, low_val, first_ema_val, bb_width, atr_val, prev_close, prev_open, sec_ema_val):
     global call_signal, put_signal, call_strike_price, put_strike_price, signal_end_time, stoploss, margin
 
     if (
         call_signal == False
         and put_signal == False
         and bb_width >= bb_width_min
-        and arr.all()
+        and first_ema_val > sec_ema_val
+        and low_val > first_ema_val
         and close_val > open_val
-        and rsi_val < rsi_upper_limit
-        and open_val > ema_val
+        and arr[0] == True
         and verify_oi_diff('CE', timing)
-        # and open_val > prev_close
-        # and open_val > prev_open
     ):
         call_signal = True
 
@@ -230,13 +229,11 @@ def signal_strategy(arr, timing, close_val, open_val, rsi_val,  high_val, low_va
         call_signal == False
         and put_signal == False
         and bb_width >= bb_width_min
-        and not any(arr)
+        and first_ema_val < sec_ema_val
+        and high_val < first_ema_val
         and close_val < open_val
-        and rsi_val > rsi_lower_limit
-        and open_val < ema_val
+        and arr[0] == False
         and verify_oi_diff('PE', timing)
-        # and open_val < prev_close
-        # and open_val < prev_open
     ):
         put_signal = True
 
@@ -303,7 +300,7 @@ def update_market_data():
 def download_data(business_day=None):
 
     df = pd.read_csv(
-        os.getcwd() + r'\Bank Nifty\test data\NIFTY Data_2Min.csv')
+        os.getcwd() + r'\Bank Nifty\test data\NIFTY Data_5Min.csv')
     df = df.set_index('Datetime')
     df.index = pd.to_datetime(df.index)
 
@@ -358,7 +355,7 @@ def get_results(business_day=None):
 
 
 def test_code(params):
-    global st1_length, st1_factor, st2_length, st2_factor, st3_length, st3_factor, rsi_period, rsi_upper_limit, rsi_lower_limit, ema_length, bb_width_min, call_signal, put_signal, call_strike_price, put_strike_price, signal_start_time, signal_end_time, signal_type, signal_strike_price, signal_result_price, signal_is_correct, margin, stoploss_factor, signal_loss, signal_profit, atr_period, interval, today, signal_stoploss, margin_factor, signal_margin, bb_length, min_oi_diff, max_loss_units
+    global st1_length, st1_factor, st2_length, st2_factor, st3_length, st3_factor, rsi_period, rsi_upper_limit, rsi_lower_limit, second_ema_length, bb_width_min, call_signal, put_signal, call_strike_price, put_strike_price, signal_start_time, signal_end_time, signal_type, signal_strike_price, signal_result_price, signal_is_correct, margin, stoploss_factor, signal_loss, signal_profit, atr_period, interval, today, signal_stoploss, margin_factor, signal_margin, bb_length, min_oi_diff, max_loss_units, first_ema_length
 
     st1_length = params[0]
     st1_factor = params[1]
@@ -369,7 +366,7 @@ def test_code(params):
     rsi_period = params[6]
     rsi_upper_limit = params[7]
     rsi_lower_limit = params[8]
-    ema_length = params[9]
+    first_ema_length = params[9]
     bb_width_min = params[10]
     margin = params[11]
     stoploss_factor = params[12] * option_delta
@@ -380,6 +377,7 @@ def test_code(params):
     bb_length = params[17]
     min_oi_diff = params[18]
     max_loss_units = params[19]
+    second_ema_length = params[20]
 
     call_signal = False
     put_signal = False
@@ -404,11 +402,12 @@ def test_code(params):
     df["ST_9"] = supertrend(df, st3_length, st3_factor)["in_uptrend"]
     df["ATR"] = atr(df, atr_period)
     df["RSI"] = rsi(df, periods=rsi_period)
-    df["EMA"] = ta.ema(df["Close"], length=ema_length)
+    df["First_EMA"] = ta.ema(df["Close"], length=first_ema_length)
     bollinger_band = ta.bbands(df["Close"], length=bb_length, std=2)[
         [f"BBL_{bb_length}_2.0", f"BBU_{bb_length}_2.0"]]
     df["Bollinger_Width"] = bollinger_band[f"BBU_{bb_length}_2.0"] - \
         bollinger_band[f"BBL_{bb_length}_2.0"]
+    df["Sec_EMA"] = ta.ema(df["Close"], length=second_ema_length)
 
     for i in tqdm(range(len(df))):
         today = dt.date(df.index[i])
@@ -423,11 +422,12 @@ def test_code(params):
             df["High"][i],
             df["Low"][i],
             df["RSI"][i],
-            df["EMA"][i],
+            df["First_EMA"][i],
             df["Bollinger_Width"][i],
             df["ATR"][i],
             df["Close"][i-1],
-            df["Open"][i-1]
+            df["Open"][i-1],
+            df["Sec_EMA"][i],
         )
 
     return get_results(business_day)
@@ -436,8 +436,8 @@ def test_code(params):
 def unit_test():
     weekly_business_day = (dt.now() - BDay(7)).strftime("%Y-%m-%d")
 
-    params = (10, 1.2, 10, 2.4, 10, 3.6, 2, 95, 0.05, 55, 100,
-              10, 2, 5, 2, '2022-03-24', 2, 12, 3000000, 35)
+    params = (10, 1.2, 10, 2.4, 10, 3.6, 2, 95, 0.05, 13, 50, 10,
+              2, 13, 5, '2022-03-20', 1.5, 12, 3000000, 35, 50)
 
     return test_code(params)
 
@@ -464,23 +464,24 @@ def grid_search_code(time_zone):
     st2_factor_list = [2.4]
     st3_length_list = [10]
     st3_factor_list = [3.6]
-    rsi_period_list = [2, 5]
+    rsi_period_list = [2]
     rsi_upper_limit_list = [95]
     rsi_lower_limit_list = [0.05]
-    ema_length_list = [55, 100, 200]
-    bb_width = [50, 75, 100]
+    first_ema_length_list = [13, 14, 15]
+    bb_width = [50, 100]
     margin = [10]
-    stoploss_factor = [1.5, 2]
-    atr_period = [2, 5]
-    interval = [2]
+    stoploss_factor = [2]
+    atr_period = [8, 13]
+    interval = [5]
     business_day = [weekly_business_day]
-    margin_factor = [1, 1.25, 1.5, 2]
-    bb_length = [12]
+    margin_factor = [1.5, 2]
+    bb_length = [12, 20]
     oi_diff = [3_000_000, 4_000_000, 5_000_000]
     max_loss_units = [35]
+    second_ema_length_list = [50, 55, 60]
 
     final = [st1_length_list, st1_factor_list, st2_length_list, st2_factor_list, st3_length_list,
-             st3_factor_list, rsi_period_list, rsi_upper_limit_list, rsi_lower_limit_list, ema_length_list, bb_width, margin, stoploss_factor, atr_period, interval, business_day, margin_factor, bb_length, oi_diff, max_loss_units]
+             st3_factor_list, rsi_period_list, rsi_upper_limit_list, rsi_lower_limit_list, first_ema_length_list, bb_width, margin, stoploss_factor, atr_period, interval, business_day, margin_factor, bb_length, oi_diff, max_loss_units, second_ema_length_list]
     res_combos = list(itertools.product(*final))
 
     with Pool(multiprocessing.cpu_count()) as p:

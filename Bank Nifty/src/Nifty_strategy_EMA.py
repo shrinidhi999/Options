@@ -23,9 +23,7 @@ import time
 import warnings
 from datetime import datetime as dt
 from datetime import time as dtm
-from datetime import timedelta
 
-import pandas as pd
 import pandas_ta as ta
 import requests
 import yfinance as yf
@@ -33,7 +31,6 @@ from indicators import atr, rsi, supertrend
 from oi_scraper import get_web_driver, get_oi_data
 from order_placement import (cancel_order, clear_cache, get_instrument_list,
                              get_order_status, robo_order, sell_order_market)
-from pandas.tseries.offsets import BDay
 from plyer import notification
 from pytz import timezone
 
@@ -87,8 +84,8 @@ margin_strike_price_units = -100
 quantity = 100
 option_delta = 0.8
 
-params = (10, 1.2, 10, 2.4, 10, 3.6, 2, 95, 0.05, 55, 75,
-          10, 2, 2, 2, '2022-03-23', 1.25, 12, 3000000, 35)
+params = (10, 1.2, 10, 2.4, 10, 3.6, 2, 95, 0.05, 13, 50, 10,
+          2, 13, 5, '2022-03-24', 1.5, 12, 3000000, 35, 50)
 
 st1_length = params[0]
 st1_factor = params[1]
@@ -99,17 +96,18 @@ st3_factor = params[5]
 rsi_period = params[6]
 rsi_upper_limit = params[7]
 rsi_lower_limit = params[8]
-ema_length = params[9]
+first_ema_length = params[9]
 bb_width_min = params[10]
 margin = params[11]
 stoploss_factor = params[12] * option_delta
 atr_period = params[13]
 interval = params[14]
-last_business_day = params[15]  # "2022-02-15"
+last_business_day = params[15]
 margin_factor = params[16] * option_delta
 bb_length = params[17]
 min_oi_diff = params[18]
 max_loss_units = params[19]
+second_ema_length = params[20]
 
 val_index = -1
 min_target_units = 5
@@ -147,13 +145,13 @@ def send_mobile_notification(msg):
     requests.get(f"{url}/sendMessage", params=params, verify=False)
 
 
-def log_notification(logging_required, super_trend_arr=None, super_trend_arr_old=None, close_val=None, open_val=None, rsi_val=None, msg=None, ema_val=None, bb_width=None):
+def log_notification(logging_required, super_trend_arr=None, super_trend_arr_old=None, close_val=None, open_val=None, rsi_val=None, msg=None, first_ema_val=None, bb_width=None, sec_ema_val=None):
     msg = f"Interval : {interval} min \n {msg}"
     set_notification(msg)
     print(msg)
     if logging_required:
         logger.info(
-            f"Message : {msg}, Close: {close_val}, Open: {open_val}, RSI: {rsi_val}, EMA:{ema_val}, BB Width: {bb_width}, super_trend_arr: {super_trend_arr}, super_trend_arr_old: {super_trend_arr_old}")
+            f"Message : {msg}, Close: {close_val}, Open: {open_val}, RSI: {rsi_val}, First EMA:{first_ema_val}, Second EMA: {sec_ema_val}, BB Width: {bb_width}, super_trend_arr: {super_trend_arr}, super_trend_arr_old: {super_trend_arr_old}")
         logger.info(
             "---------------------------------------------------------------------------------------------")
 
@@ -243,14 +241,14 @@ def verify_oi_diff(order_type):
     return False
 
 
-def signal_alert(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val, high_val, low_val, ema_val, bb_width, atr_val, prev_close_val, prev_open_val):
+def signal_alert(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val, high_val, low_val, first_ema_val, bb_width, atr_val, prev_close_val, prev_open_val, sec_ema_val):
     global call_signal, put_signal, call_strike_price, put_strike_price
 
     print(f"Time: {timing}")
     timing = timing.strftime(time_format)
 
     logger.info(
-        f"Message : Interval {interval} min, Close: {close_val}, Open: {open_val}, RSI: {rsi_val}, EMA: {ema_val}, BB width: {bb_width}, super_trend_arr: {super_trend_arr}, super_trend_arr_old: {super_trend_arr_old}")
+        f"Message : Interval {interval} min, Close: {close_val}, Open: {open_val}, RSI: {rsi_val}, First EMA: {first_ema_val}, Second EMA: {sec_ema_val}, BB width: {bb_width}, super_trend_arr: {super_trend_arr}, super_trend_arr_old: {super_trend_arr_old}")
 
     # Keeping this code commented as sometimes option price may not move as quickly as market price.
     # if call_signal:
@@ -264,52 +262,50 @@ def signal_alert(super_trend_arr, super_trend_arr_old, timing, close_val, open_v
     #         call_strike_price = put_strike_price = 0
 
     call_strategy(super_trend_arr, super_trend_arr_old,
-                  timing, close_val, open_val, rsi_val, high_val, low_val, ema_val, bb_width, atr_val, prev_close_val, prev_open_val)
+                  timing, close_val, open_val, rsi_val, high_val, low_val, first_ema_val, bb_width, atr_val, prev_close_val, prev_open_val, sec_ema_val)
 
     put_strategy(super_trend_arr, super_trend_arr_old,
-                 timing, close_val, open_val, rsi_val, high_val, low_val, ema_val, bb_width, atr_val, prev_close_val, prev_open_val)
+                 timing, close_val, open_val, rsi_val, high_val, low_val, first_ema_val, bb_width, atr_val, prev_close_val, prev_open_val, sec_ema_val)
 
 
-def put_strategy(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val, high_val, low_val, ema_val, bb_width, atr_val, prev_close_val, prev_open_val):
+def put_strategy(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val, high_val, low_val, first_ema_val, bb_width, atr_val, prev_close_val, prev_open_val, sec_ema_val):
     global put_signal
 
     if (
         call_signal == False
         and put_signal == False
         and bb_width >= bb_width_min
-        and not any(super_trend_arr)
+        and first_ema_val < sec_ema_val
+        and high_val < first_ema_val
         and close_val < open_val
-        and rsi_val > rsi_lower_limit
-        and open_val < ema_val
-        and verify_oi_diff('PE')
-        # and open_val < prev_close_val
-        # and open_val < prev_open_val
+        and super_trend_arr[0] == False
+        and verify_oi_diff('PE', timing)
     ):
 
         set_put_signal(super_trend_arr, super_trend_arr_old,
-                       timing, close_val, open_val, rsi_val, ema_val, atr_val, bb_width)
+                       timing, close_val, open_val, rsi_val, first_ema_val, atr_val, bb_width, sec_ema_val)
 
     if put_signal and ((super_trend_arr[0] == True) and (verify_oi_diff('PE') == False)):
         exit_put_signal(super_trend_arr, super_trend_arr_old,
                         timing, close_val, open_val, rsi_val)
 
 
-def call_strategy(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val, high_val, low_val, ema_val, bb_width, atr_val, prev_close_val, prev_open_val):
+def call_strategy(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val, high_val, low_val, first_ema_val, bb_width, atr_val, prev_close_val, prev_open_val, sec_ema_val):
+
     global call_signal
+
     if (
         call_signal == False
         and put_signal == False
         and bb_width >= bb_width_min
-        and super_trend_arr.all()
+        and first_ema_val > sec_ema_val
+        and low_val > first_ema_val
         and close_val > open_val
-        and rsi_val < rsi_upper_limit
-        and open_val > ema_val
-        and verify_oi_diff('CE')
-        # and open_val > prev_close_val
-        # and open_val > prev_open_val
+        and super_trend_arr[0] == True
+        and verify_oi_diff('CE', timing)
     ):
         set_call_signal(super_trend_arr, super_trend_arr_old,
-                        timing, close_val, open_val, rsi_val, ema_val, atr_val, bb_width)
+                        timing, close_val, open_val, rsi_val, first_ema_val, atr_val, bb_width, sec_ema_val)
 
     if call_signal and ((super_trend_arr[0] == False) and (verify_oi_diff('CE') == False)):
         exit_call_signal(super_trend_arr, super_trend_arr_old,
@@ -344,7 +340,8 @@ def exit_call_signal(super_trend_arr, super_trend_arr_old, timing, close_val, op
         exit_order()
 
 
-def set_put_signal(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val, ema_val, atr_val, bb_width):
+def set_put_signal(super_trend_arr, super_trend_arr_old,
+                   timing, close_val, open_val, rsi_val, first_ema_val, atr_val, bb_width, sec_ema_val):
     global put_signal
 
     put_signal = True
@@ -364,12 +361,13 @@ def set_put_signal(super_trend_arr, super_trend_arr_old, timing, close_val, open
     msg = f"PUT SIGNAL !!! {timing}, \nPUT Strike Price: {strike_price} PE, \nStop Loss:  {stoploss_val}, \nMargin: {margin_val}"
 
     log_notification(True, super_trend_arr=super_trend_arr, super_trend_arr_old=super_trend_arr_old,
-                     close_val=close_val, open_val=open_val, rsi_val=rsi_val, msg=msg, ema_val=ema_val, bb_width=bb_width)
+                     close_val=close_val, open_val=open_val, rsi_val=rsi_val, msg=msg, first_ema_val=first_ema_val, bb_width=bb_width, sec_ema_val=sec_ema_val)
 
     place_order("PE", strike_price, option_price, margin_val, stoploss_val)
 
 
-def set_call_signal(super_trend_arr, super_trend_arr_old, timing, close_val, open_val, rsi_val, ema_val, atr_val, bb_width):
+def set_call_signal(super_trend_arr, super_trend_arr_old,
+                    timing, close_val, open_val, rsi_val, first_ema_val, atr_val, bb_width, sec_ema_val):
     global call_signal
 
     call_signal = True
@@ -389,7 +387,7 @@ def set_call_signal(super_trend_arr, super_trend_arr_old, timing, close_val, ope
     msg = f"CALL SIGNAL !!! {timing},  \nCALL Strike Price: {strike_price} CE, \nStop Loss:  {stoploss_val}, \nMargin: {margin_val}"
 
     log_notification(True, super_trend_arr=super_trend_arr, super_trend_arr_old=super_trend_arr_old,
-                     close_val=close_val, open_val=open_val, rsi_val=rsi_val, msg=msg, ema_val=ema_val, bb_width=bb_width)
+                     close_val=close_val, open_val=open_val, rsi_val=rsi_val, msg=msg, first_ema_val=first_ema_val, bb_width=bb_width, sec_ema_val=sec_ema_val)
 
     place_order("CE", strike_price, option_price, margin_val, stoploss_val)
 
@@ -473,7 +471,8 @@ def indicator_calc_signal_generation():
     df["ST_9"] = supertrend(df, st3_length, st3_factor)["in_uptrend"]
     df["ATR"] = atr(df, atr_period)
     df["RSI"] = rsi(df, periods=rsi_period)
-    df["EMA"] = ta.ema(df["Close"], length=ema_length)
+    df["First_EMA"] = ta.ema(df["Close"], length=first_ema_length)
+    df["Sec_EMA"] = ta.ema(df["Close"], length=second_ema_length)
 
     bollinger_band = ta.bbands(df["Close"], length=bb_length, std=2)[
         [f"BBL_{bb_length}_2.0", f"BBU_{bb_length}_2.0"]]
@@ -494,11 +493,12 @@ def indicator_calc_signal_generation():
         df["RSI"][val_index],
         df["High"][val_index],
         df["Low"][val_index],
-        df["EMA"][val_index],
+        df["First_EMA"][val_index],
         df["Bollinger_Width"][val_index],
         df["ATR"][val_index],
         df["Close"][val_index - 1],
-        df["Open"][val_index - 1]
+        df["Open"][val_index - 1],
+        df["Sec_EMA"][val_index]
     )
 
 
